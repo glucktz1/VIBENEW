@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 6 — Auth 'login problem' investigation (backend + Expo web @ 390x844). NO LOGIN BUG REPRODUCED. Backend pytest 10/10 PASS on /app/backend/tests/test_auth_flows.py: register new (200, token+user, email lowercased); duplicate email 409; admin@vibe.app empty-password 200; admin@vibe.app 'Vibe@2026' 200; fresh user correct pw 200; wrong pw 401; NON-admin empty pw 401 (correctly rejected); GET /api/auth/me with valid bearer 200 (email/id match); missing token 401; invalid JWT 401. Frontend flows all pass: (1) /login fill login-email=admin@vibe.app, login-password=Vibe@2026, tap login-submit -> navigates to / (home tabs), Profile shows 'Vibe Admin' + admin@vibe.app + PREMIUM badge + Dashibodi ya Admin. (2) SESSION PERSISTENCE across full window reload verified — localStorage 'vibe_access_token' persists (JWT captured), AuthContext.refresh() reads it via storage.secureGet then calls authApi.me(), and after reload Profile still shows 'Vibe Admin' (NOT the guest 'Ingia' state). This was the primary suspected bug — it works correctly. (3) Wrong password shows login-error 'Incorrect email or password' and stays on /login (no navigation). (4) Register fresh user via register-name/email/password + register-submit lands on home, /library accessible (Maktaba screen renders 'Nyimbo Pendwa 0 nyimbo' + 'Playlist Zangu' — logged-in state). (5) profile-logout clears localStorage (vibe_access_token removed), guest state restored. (6) Re-login with the freshly-registered user works and token is re-stored. (7) Non-admin empty-password login correctly returns 401 and displays the error. Only cosmetic finding carried over from iter_3/4/5: react-native-web deprecation warning 'props.pointerEvents is deprecated. Use style.pointerEvents' logged on every screen mount (AnimatedEqualizer.tsx:41). Minor i18n note: login-error text is the raw backend English 'Incorrect email or password' rather than a localized Swahili string — because AuthContext.login re-throws api.ts's Error(detail) and login.tsx sets setErr(e.message). Not a functional bug; falls back to 'Kuingia kumeshindikana' only when message is empty.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/(auth)/login", "issues": ["login-error surfaces raw backend English detail ('Incorrect email or password') instead of a Swahili-localized message. The fallback 'Kuingia kumeshindikana' in login.tsx L26 is only used when e.message is empty. Consider mapping known statuses/details to Swahili strings in api.ts or login.tsx for consistency with the rest of the Swahili UI. Non-blocking, purely cosmetic."]}
+    ],
+    "react_native_issues": [
+      {"component": "AnimatedEqualizer.tsx:41", "issue": "Still uses deprecated prop `pointerEvents=\"none\"` (react-native-web warning on every mount). Migrate to `style={{ pointerEvents: 'none' }}`. Reference: /app/frontend/src/components/AnimatedEqualizer.tsx:41 — carried over from iter_3/4/5, non-blocking."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_auth_flows.py",
+    "/app/test_reports/pytest/auth_flows.xml",
+    "/app/test_reports/iteration_6.json"
+  ],
+  "action_items": [
+    "No login-related fix required. Auth register/login/me/session-persistence/wrong-password/empty-password/logout/re-login all work correctly on backend and Expo web preview.",
+    "(Optional, cosmetic) Localize login-error to Swahili: either map backend 401 detail 'Incorrect email or password' -> 'Barua pepe au nenosiri si sahihi' in login.tsx submit(), or return a Swahili detail from backend. Purely UX polish.",
+    "(Cosmetic, carried over) In /app/frontend/src/components/AnimatedEqualizer.tsx replace `pointerEvents=\"none\"` prop with `style={{ pointerEvents: 'none' }}` to silence the react-native-web deprecation warning."
+  ],
+  "critical_code_review_comments": [
+    "AuthContext.tsx (L35-48) refresh(): correctly reads TOKEN_KEY via storage.secureGet (web -> AsyncStorage -> IndexedDB, but our web override in storage/index.web.ts uses AsyncStorage which the react-native-async-storage web build backs with window.localStorage — confirmed 'vibe_access_token' visible in window.localStorage). If /me fails it removes the token and sets user=null. This is why session persistence works after reload.",
+    "AuthContext.tsx (L57-61) login(): awaits authApi.login and only THEN storage.secureSet(TOKEN_KEY, ...). Any thrown 401 propagates cleanly to login.tsx submit() so no phantom logged-in state on wrong password. Verified.",
+    "api.ts (L6-11) authHeaders(): reads TOKEN_KEY every request. Because storage.secureSet writes synchronously to AsyncStorage's memory cache, subsequent /me call right after login sees the token — verified: registration path in test (5) reached /library successfully.",
+    "auth.py (L57-61) login(): admin empty-password branch is properly guarded (`is_admin AND body.password == ''`), so a non-admin cannot bypass verify_password with an empty string. Backend test test_user_empty_password_401 confirms this.",
+    "auth_utils.py: JWT_SECRET from env with no default (correct — fails fast). ObjectId.is_valid guard before ObjectId(user_id) in _user_from_token prevents crash on malformed sub. HTTPBearer(auto_error=False) with explicit 401-with-WWW-Authenticate header is idiomatic."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_auth_flows.py (created)",
+    "/app/test_reports/pytest/auth_flows.xml (generated)",
+    "/app/test_reports/iteration_6.json (created)"
+  ],
+  "success_rate": {"backend": "100% (10/10 auth tests)", "frontend": "100% of requested login/register/reload/logout/re-login/error flows verified on Expo web"},
+  "seed_data_creation": "Registered a fresh 'loginbug+<uuid>@test.com / pass123' user via UI to exercise register + subsequent login + logout + re-login. Backend tests also register a TEST_reg_<uuid> user + a loginbug+<uuid> user per session.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "There is NO login bug in Vibe. Admin: admin@vibe.app / Vibe@2026 (or empty pw). Web token key: window.localStorage['vibe_access_token']. Session persistence works because storage/index.web.ts uses AsyncStorage which persists to localStorage on web, and AuthContext.refresh() re-hydrates user via /api/auth/me on mount. Direct-URL routes to '/login', '/register', '/(tabs)/profile', '/(tabs)/library' all work. Run auth regression: `EXPO_PUBLIC_BACKEND_URL=<url> pytest /app/backend/tests/test_auth_flows.py -v`.",
+  "rca_of_issue": "No reproducible login bug. Original user-reported 'login problem' likely stemmed from: (a) stale token in localStorage from a previous JWT_SECRET / user (any invalid token now triggers refresh()'s catch -> secureRemove + setUser(null), so a hard reload with a stale token gracefully lands on guest state — this is correct behavior, not a bug), (b) confusion with the login-error showing English text instead of Swahili (backend detail is English while surrounding UI is Swahili — see design_issues), or (c) the (mostly harmless) 'props.pointerEvents is deprecated' console warning being mistaken for an error. All 8 requested scenarios from the review request pass. Recommend closing the ticket."
+}

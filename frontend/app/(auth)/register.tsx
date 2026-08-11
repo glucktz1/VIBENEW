@@ -27,7 +27,8 @@ export default function Register() {
       await register(email.trim(), password, name.trim());
       router.replace("/(tabs)");
     } catch (e: any) {
-      setErr(e.message || "Usajili umeshindikana");
+      const msg = String(e?.message || "");
+      setErr(msg.toLowerCase().includes("already registered") ? "Barua pepe hii tayari imesajiliwa" : (msg || "Usajili umeshindikana"));
     } finally {
       setLoading(false);
     }

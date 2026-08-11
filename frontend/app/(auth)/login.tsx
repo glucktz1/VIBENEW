@@ -1,10 +1,9 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
+import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { KeyboardAvoidingView, Platform } from "react-native";
 import { useAuth } from "@/src/context/AuthContext";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 
@@ -23,7 +22,8 @@ export default function Login() {
       await login(email.trim(), password);
       router.replace("/(tabs)");
     } catch (e: any) {
-      setErr(e.message || "Kuingia kumeshindikana");
+      const msg = String(e?.message || "");
+      setErr(msg.toLowerCase().includes("incorrect") ? "Barua pepe au nenosiri si sahihi" : (msg || "Kuingia kumeshindikana"));
     } finally {
       setLoading(false);
     }
