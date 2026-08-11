@@ -1,0 +1,189 @@
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from typing import Optional, List
+import uuid
+
+from db import db, now_utc
+from auth_utils import require_admin
+
+router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+
+class AlbumIn(BaseModel):
+    title: str
+    artist_name: str
+    description: Optional[str] = None
+    category_id: Optional[str] = None
+    thumbnail: Optional[str] = None
+    tags: List[str] = []
+    monetization_type: str = "free"
+
+
+class SongIn(BaseModel):
+    title: str
+    album_id: str
+    audio_url: str
+    duration: Optional[int] = None
+    track_number: Optional[int] = None
+    song_categories: List[str] = []
+
+
+class PlanIn(BaseModel):
+    name: str
+    price: int
+    duration_days: int
+    currency: str = "TZS"
+    description: Optional[str] = None
+
+
+@router.get("/stats")
+async def dashboard_stats(admin: dict = Depends(require_admin)):
+    total_users = await db.users.count_documents({})
+    premium_users = await db.users.count_documents({"is_premium": True})
+    total_songs = await db.songs.count_documents({})
+    total_albums = await db.albums.count_documents({})
+    total_plays = await db.play_events.count_documents({})
+    total_playlists = await db.playlists.count_documents({})
+    txns = await db.transactions.find({"status": "completed"}, {"_id": 0, "amount": 1}).to_list(10000)
+    revenue = sum(t.get("amount", 0) for t in txns)
+
+    top_songs = await db.songs.find({}, {"_id": 0, "song_id": 1, "title": 1, "plays": 1, "likes": 1}).sort("plays", -1).limit(5).to_list(5)
+    for s in top_songs:
+        alb = await db.albums.find_one({"album_id": (await db.songs.find_one({"song_id": s["song_id"]}, {"_id": 0, "album_id": 1}) or {}).get("album_id")}, {"_id": 0, "artist_name": 1})
+        s["artist_name"] = alb.get("artist_name") if alb else None
+
+    return {
+        "total_users": total_users,
+        "premium_users": premium_users,
+        "total_songs": total_songs,
+        "total_albums": total_albums,
+        "total_plays": total_plays,
+        "total_playlists": total_playlists,
+        "revenue": revenue,
+        "currency": "TZS",
+        "top_songs": top_songs,
+    }
+
+
+@router.get("/analytics/plays")
+async def plays_analytics(admin: dict = Depends(require_admin)):
+    pipeline = [
+        {"$group": {
+            "_id": {"guest": "$is_guest"},
+            "count": {"$sum": 1},
+        }},
+    ]
+    rows = await db.play_events.aggregate(pipeline).to_list(10)
+    guest = 0
+    logged = 0
+    for r in rows:
+        if r["_id"].get("guest"):
+            guest = r["count"]
+        else:
+            logged = r["count"]
+    return {"guest_plays": guest, "logged_in_plays": logged, "total": guest + logged}
+
+
+# -------- Albums CRUD --------
+@router.post("/albums")
+async def create_album(body: AlbumIn, admin: dict = Depends(require_admin)):
+    cat = None
+    if body.category_id:
+        cat = await db.categories.find_one({"category_id": body.category_id}, {"_id": 0, "name": 1})
+    doc = {
+        "album_id": f"alb_{uuid.uuid4().hex[:12]}",
+        "title": body.title,
+        "artist_name": body.artist_name,
+        "artist_id": f"art_{uuid.uuid4().hex[:8]}",
+        "description": body.description,
+        "category_id": body.category_id,
+        "category_name": cat.get("name") if cat else None,
+        "thumbnail": body.thumbnail,
+        "tags": body.tags,
+        "monetization_type": body.monetization_type,
+        "status": "active",
+        "songs_count": 0,
+        "total_plays": 0,
+        "created_at": now_utc(),
+    }
+    await db.albums.insert_one(dict(doc))
+    doc.pop("_id", None)
+    return doc
+
+
+@router.delete("/albums/{album_id}")
+async def delete_album(album_id: str, admin: dict = Depends(require_admin)):
+    await db.albums.delete_one({"album_id": album_id})
+    await db.songs.delete_many({"album_id": album_id})
+    return {"ok": True}
+
+
+# -------- Songs CRUD --------
+@router.post("/songs")
+async def create_song(body: SongIn, admin: dict = Depends(require_admin)):
+    album = await db.albums.find_one({"album_id": body.album_id})
+    if not album:
+        raise HTTPException(status_code=404, detail="Album not found")
+    doc = {
+        "song_id": f"song_{uuid.uuid4().hex[:12]}",
+        "title": body.title,
+        "album_id": body.album_id,
+        "audio_url": body.audio_url,
+        "duration": body.duration,
+        "track_number": body.track_number or (album.get("songs_count", 0) + 1),
+        "song_categories": body.song_categories,
+        "plays": 0,
+        "likes": 0,
+        "status": "active",
+        "thumbnail": album.get("thumbnail"),
+        "created_at": now_utc(),
+    }
+    await db.songs.insert_one(dict(doc))
+    await db.albums.update_one({"album_id": body.album_id}, {"$inc": {"songs_count": 1}})
+    doc.pop("_id", None)
+    return doc
+
+
+@router.delete("/songs/{song_id}")
+async def delete_song(song_id: str, admin: dict = Depends(require_admin)):
+    song = await db.songs.find_one({"song_id": song_id})
+    if song:
+        await db.albums.update_one({"album_id": song.get("album_id")}, {"$inc": {"songs_count": -1}})
+    await db.songs.delete_one({"song_id": song_id})
+    return {"ok": True}
+
+
+# -------- Users --------
+@router.get("/users")
+async def list_users(admin: dict = Depends(require_admin)):
+    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("created_at", -1).limit(200).to_list(200)
+    for u in users:
+        u["id"] = u.get("email")
+    return users
+
+
+# -------- Plans --------
+@router.post("/plans")
+async def create_plan(body: PlanIn, admin: dict = Depends(require_admin)):
+    doc = {
+        "plan_id": f"plan_{uuid.uuid4().hex[:8]}",
+        "name": body.name,
+        "price": body.price,
+        "duration_days": body.duration_days,
+        "currency": body.currency,
+        "description": body.description,
+        "status": "active",
+        "created_at": now_utc(),
+    }
+    await db.subscription_plans.insert_one(dict(doc))
+    doc.pop("_id", None)
+    return doc
+
+
+# -------- Billing toggle --------
+@router.post("/billing-toggle")
+async def toggle_billing(admin: dict = Depends(require_admin)):
+    cfg = await db.app_config.find_one({"key": "billing"})
+    new_val = not (cfg.get("value", True) if cfg else True)
+    await db.app_config.update_one({"key": "billing"}, {"$set": {"value": new_val}}, upsert=True)
+    return {"billing_enabled": new_val}

@@ -1,0 +1,272 @@
+import React, { useEffect, useState, useCallback } from "react";
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, TextInput, Modal, KeyboardAvoidingView, Platform } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { adminApi, musicApi } from "@/src/services/api";
+import { useAuth } from "@/src/context/AuthContext";
+import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
+
+export default function AdminDashboard() {
+  const router = useRouter();
+  const { isAdmin, loading: authLoading } = useAuth();
+  const [stats, setStats] = useState<any>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  const [albums, setAlbums] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<"overview" | "content" | "users">("overview");
+  const [toast, setToast] = useState("");
+
+  // add forms
+  const [showAlbum, setShowAlbum] = useState(false);
+  const [showSong, setShowSong] = useState(false);
+  const [albForm, setAlbForm] = useState({ title: "", artist_name: "", thumbnail: "" });
+  const [songForm, setSongForm] = useState({ title: "", album_id: "", audio_url: "" });
+
+  const load = useCallback(async () => {
+    try {
+      const [s, u, a] = await Promise.all([adminApi.stats(), adminApi.users(), musicApi.albums()]);
+      setStats(s); setUsers(u); setAlbums(a);
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { if (isAdmin) load(); }, [isAdmin, load]);
+
+  const flash = (m: string) => { setToast(m); setTimeout(() => setToast(""), 2200); };
+
+  const createAlbum = async () => {
+    if (!albForm.title || !albForm.artist_name) return;
+    try {
+      await adminApi.createAlbum({ ...albForm, thumbnail: albForm.thumbnail || "https://picsum.photos/seed/vibe/400" });
+      setShowAlbum(false); setAlbForm({ title: "", artist_name: "", thumbnail: "" });
+      flash("Albamu imeongezwa"); load();
+    } catch (e: any) { flash(e.message); }
+  };
+
+  const createSong = async () => {
+    if (!songForm.title || !songForm.album_id || !songForm.audio_url) return;
+    try {
+      await adminApi.createSong(songForm);
+      setShowSong(false); setSongForm({ title: "", album_id: "", audio_url: "" });
+      flash("Wimbo umeongezwa"); load();
+    } catch (e: any) { flash(e.message); }
+  };
+
+  if (authLoading) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
+
+  if (!isAdmin) {
+    return (
+      <SafeAreaView style={styles.center} edges={["top"]}>
+        <Ionicons name="lock-closed" size={48} color={COLORS.textMuted} />
+        <Text style={styles.denied}>Huna ruhusa ya admin</Text>
+        <Pressable style={styles.primary} onPress={() => router.replace("/(tabs)")}>
+          <Text style={styles.primaryText}>Rudi Nyumbani</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.root} edges={["top"]}>
+      <View style={styles.header}>
+        <Pressable testID="admin-back" onPress={() => router.back()} hitSlop={10}>
+          <Ionicons name="chevron-back" size={26} color={COLORS.text} />
+        </Pressable>
+        <Text style={styles.h1}>Dashibodi</Text>
+        <Ionicons name="shield-checkmark" size={22} color={COLORS.warning} />
+      </View>
+
+      <View style={styles.segment}>
+        {(["overview", "content", "users"] as const).map((t) => (
+          <Pressable key={t} testID={`admin-tab-${t}`} style={[styles.segBtn, tab === t && styles.segActive]} onPress={() => setTab(t)}>
+            <Text style={[styles.segText, tab === t && styles.segTextActive]}>
+              {t === "overview" ? "Muhtasari" : t === "content" ? "Maudhui" : "Watumiaji"}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {loading ? (
+        <ActivityIndicator color={COLORS.primary} style={{ marginTop: SPACING.xl }} />
+      ) : (
+        <ScrollView contentContainerStyle={{ padding: SPACING.md, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+          {tab === "overview" && stats ? (
+            <>
+              <View style={styles.statGrid}>
+                <StatCard testID="stat-users" icon="people" label="Watumiaji" value={stats.total_users} />
+                <StatCard testID="stat-premium" icon="star" label="Premium" value={stats.premium_users} color={COLORS.warning} />
+                <StatCard testID="stat-songs" icon="musical-notes" label="Nyimbo" value={stats.total_songs} color={COLORS.success} />
+                <StatCard testID="stat-albums" icon="albums" label="Albamu" value={stats.total_albums} />
+                <StatCard testID="stat-plays" icon="play" label="Michezo" value={stats.total_plays} color={COLORS.primaryLight} />
+                <StatCard testID="stat-revenue" icon="cash" label={`Mapato (${stats.currency})`} value={stats.revenue?.toLocaleString()} color={COLORS.success} />
+              </View>
+
+              <Text style={styles.sectionTitle}>Nyimbo Zinazoongoza</Text>
+              {(stats.top_songs || []).map((s: any, i: number) => (
+                <View key={s.song_id} style={styles.topRow}>
+                  <Text style={styles.rank}>{i + 1}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.topTitle} numberOfLines={1}>{s.title}</Text>
+                    <Text style={styles.topSub}>{s.artist_name || "Vibe"}</Text>
+                  </View>
+                  <Text style={styles.topPlays}>{s.plays} ▶</Text>
+                </View>
+              ))}
+            </>
+          ) : null}
+
+          {tab === "content" ? (
+            <>
+              <View style={styles.actionRow}>
+                <Pressable testID="admin-add-album" style={styles.actBtn} onPress={() => setShowAlbum(true)}>
+                  <Ionicons name="add" size={20} color="#fff" />
+                  <Text style={styles.actText}>Albamu</Text>
+                </Pressable>
+                <Pressable testID="admin-add-song" style={[styles.actBtn, { backgroundColor: COLORS.success }]} onPress={() => setShowSong(true)}>
+                  <Ionicons name="add" size={20} color="#fff" />
+                  <Text style={styles.actText}>Wimbo</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.sectionTitle}>Albamu ({albums.length})</Text>
+              {albums.map((a) => (
+                <View key={a.album_id} style={styles.contentRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.topTitle} numberOfLines={1}>{a.title}</Text>
+                    <Text style={styles.topSub}>{a.artist_name} · {a.songs_count} nyimbo</Text>
+                  </View>
+                </View>
+              ))}
+            </>
+          ) : null}
+
+          {tab === "users" ? (
+            <>
+              <Text style={styles.sectionTitle}>Watumiaji ({users.length})</Text>
+              {users.map((u, i) => (
+                <View key={i} style={styles.contentRow}>
+                  <View style={styles.userAvatar}>
+                    <Ionicons name="person" size={16} color="#fff" />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: SPACING.sm }}>
+                    <Text style={styles.topTitle} numberOfLines={1}>{u.name || u.email}</Text>
+                    <Text style={styles.topSub} numberOfLines={1}>{u.email}</Text>
+                  </View>
+                  {u.is_premium ? <Ionicons name="star" size={16} color={COLORS.warning} /> : null}
+                  {u.role !== "customer" ? <Text style={styles.roleBadge}>{u.role}</Text> : null}
+                </View>
+              ))}
+            </>
+          ) : null}
+        </ScrollView>
+      )}
+
+      {toast ? <View style={styles.toast}><Text style={styles.toastText}>{toast}</Text></View> : null}
+
+      {/* Add album modal */}
+      <FormModal
+        visible={showAlbum} title="Ongeza Albamu" onClose={() => setShowAlbum(false)} onSave={createAlbum} testID="album-form"
+        fields={[
+          { key: "title", label: "Kichwa", value: albForm.title, set: (v: string) => setAlbForm({ ...albForm, title: v }) },
+          { key: "artist_name", label: "Msanii", value: albForm.artist_name, set: (v: string) => setAlbForm({ ...albForm, artist_name: v }) },
+          { key: "thumbnail", label: "URL ya Picha (hiari)", value: albForm.thumbnail, set: (v: string) => setAlbForm({ ...albForm, thumbnail: v }) },
+        ]}
+      />
+      {/* Add song modal */}
+      <FormModal
+        visible={showSong} title="Ongeza Wimbo" onClose={() => setShowSong(false)} onSave={createSong} testID="song-form"
+        fields={[
+          { key: "title", label: "Kichwa", value: songForm.title, set: (v: string) => setSongForm({ ...songForm, title: v }) },
+          { key: "album_id", label: "Album ID", value: songForm.album_id, set: (v: string) => setSongForm({ ...songForm, album_id: v }) },
+          { key: "audio_url", label: "URL ya Sauti", value: songForm.audio_url, set: (v: string) => setSongForm({ ...songForm, audio_url: v }) },
+        ]}
+      />
+    </SafeAreaView>
+  );
+}
+
+function StatCard({ icon, label, value, color = COLORS.primary, testID }: any) {
+  return (
+    <View testID={testID} style={styles.statCard}>
+      <Ionicons name={icon} size={22} color={color} />
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function FormModal({ visible, title, fields, onClose, onSave, testID }: any) {
+  return (
+    <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <View style={styles.sheet} testID={testID}>
+          <View style={styles.handle} />
+          <Text style={styles.modalTitle}>{title}</Text>
+          {fields.map((f: any) => (
+            <View key={f.key} style={{ marginBottom: SPACING.sm }}>
+              <Text style={styles.fieldLabel}>{f.label}</Text>
+              <TextInput
+                testID={`${testID}-${f.key}`}
+                style={styles.input}
+                value={f.value}
+                onChangeText={f.set}
+                placeholder={f.label}
+                placeholderTextColor={COLORS.textMuted}
+                autoCapitalize="none"
+              />
+            </View>
+          ))}
+          <Pressable testID={`${testID}-save`} style={styles.saveBtn} onPress={onSave}>
+            <Text style={styles.saveText}>Hifadhi</Text>
+          </Pressable>
+          <Pressable style={styles.cancelBtn} onPress={onClose}>
+            <Text style={styles.cancelText}>Ghairi</Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: COLORS.background },
+  center: { flex: 1, backgroundColor: COLORS.background, alignItems: "center", justifyContent: "center", padding: SPACING.lg },
+  denied: { color: COLORS.text, fontSize: FONT.lg, fontWeight: "700", marginTop: SPACING.md },
+  primary: { backgroundColor: COLORS.primary, borderRadius: RADIUS.full, paddingHorizontal: SPACING.xl, height: 48, alignItems: "center", justifyContent: "center", marginTop: SPACING.lg },
+  primaryText: { color: "#fff", fontWeight: "800" },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: SPACING.md },
+  h1: { color: COLORS.text, fontSize: FONT.xl, fontWeight: "800" },
+  segment: { flexDirection: "row", marginHorizontal: SPACING.md, backgroundColor: COLORS.surface, borderRadius: RADIUS.md, padding: 4 },
+  segBtn: { flex: 1, paddingVertical: SPACING.sm, borderRadius: RADIUS.sm, alignItems: "center" },
+  segActive: { backgroundColor: COLORS.primary },
+  segText: { color: COLORS.textSecondary, fontWeight: "700", fontSize: FONT.sm },
+  segTextActive: { color: "#fff" },
+  statGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+  statCard: { width: "31%", backgroundColor: COLORS.card, borderRadius: RADIUS.md, padding: SPACING.md, marginBottom: SPACING.sm, borderWidth: 1, borderColor: COLORS.border, alignItems: "flex-start" },
+  statValue: { color: COLORS.text, fontSize: FONT.xl, fontWeight: "800", marginTop: SPACING.xs },
+  statLabel: { color: COLORS.textSecondary, fontSize: FONT.xs, marginTop: 2 },
+  sectionTitle: { color: COLORS.text, fontSize: FONT.lg, fontWeight: "800", marginTop: SPACING.lg, marginBottom: SPACING.sm },
+  topRow: { flexDirection: "row", alignItems: "center", paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.divider },
+  rank: { width: 28, color: COLORS.primary, fontWeight: "800", fontSize: FONT.md },
+  topTitle: { color: COLORS.text, fontSize: FONT.md, fontWeight: "600" },
+  topSub: { color: COLORS.textSecondary, fontSize: FONT.sm, marginTop: 2 },
+  topPlays: { color: COLORS.textMuted, fontSize: FONT.sm },
+  actionRow: { flexDirection: "row", gap: SPACING.sm, marginBottom: SPACING.sm },
+  actBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primary, borderRadius: RADIUS.md, height: 46 },
+  actText: { color: "#fff", fontWeight: "800", marginLeft: 4 },
+  contentRow: { flexDirection: "row", alignItems: "center", paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.divider },
+  userAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center" },
+  roleBadge: { color: COLORS.warning, fontSize: FONT.xs, fontWeight: "800", marginLeft: SPACING.sm, textTransform: "uppercase" },
+  toast: { position: "absolute", bottom: 40, left: SPACING.lg, right: SPACING.lg, backgroundColor: COLORS.card, borderRadius: RADIUS.md, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.border },
+  toastText: { color: COLORS.text, textAlign: "center", fontWeight: "600" },
+  overlay: { flex: 1, backgroundColor: COLORS.overlay, justifyContent: "flex-end" },
+  sheet: { backgroundColor: COLORS.card, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, padding: SPACING.lg, paddingBottom: SPACING.xxl },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border, alignSelf: "center", marginBottom: SPACING.md },
+  modalTitle: { color: COLORS.text, fontSize: FONT.xl, fontWeight: "800", marginBottom: SPACING.md },
+  fieldLabel: { color: COLORS.textSecondary, fontSize: FONT.sm, marginBottom: 4 },
+  input: { backgroundColor: COLORS.surface, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, height: 46, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border },
+  saveBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.full, height: 50, alignItems: "center", justifyContent: "center", marginTop: SPACING.sm },
+  saveText: { color: "#fff", fontWeight: "800", fontSize: FONT.md },
+  cancelBtn: { alignItems: "center", paddingVertical: SPACING.md },
+  cancelText: { color: COLORS.textMuted },
+});
