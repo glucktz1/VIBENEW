@@ -6,11 +6,13 @@ import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 
 export default function AddToPlaylistSheet({
   songId,
+  songIds,
   visible,
   onClose,
   onDone,
 }: {
   songId: string | null;
+  songIds?: string[];
   visible: boolean;
   onClose: () => void;
   onDone: (msg: string) => void;
@@ -19,6 +21,8 @@ export default function AddToPlaylistSheet({
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
+
+  const idsToAdd = () => (songIds && songIds.length ? songIds : songId ? [songId] : []);
 
   useEffect(() => {
     if (visible) load();
@@ -33,10 +37,13 @@ export default function AddToPlaylistSheet({
   };
 
   const add = async (pl: any) => {
-    if (!songId) return;
+    const ids = idsToAdd();
+    if (!ids.length) return;
     try {
-      await libraryApi.addToPlaylist(pl.playlist_id, songId);
-      onDone(`Imeongezwa kwenye "${pl.name}"`);
+      for (const id of ids) {
+        await libraryApi.addToPlaylist(pl.playlist_id, id);
+      }
+      onDone(ids.length > 1 ? `Nyimbo ${ids.length} zimeongezwa kwenye "${pl.name}"` : `Imeongezwa kwenye "${pl.name}"`);
       onClose();
     } catch (e: any) {
       onDone(e.message || "Imeshindikana");
@@ -49,7 +56,10 @@ export default function AddToPlaylistSheet({
       const pl = await libraryApi.createPlaylist(name.trim());
       setName("");
       setCreating(false);
-      if (songId) await libraryApi.addToPlaylist(pl.playlist_id, songId);
+      const ids = idsToAdd();
+      for (const id of ids) {
+        await libraryApi.addToPlaylist(pl.playlist_id, id);
+      }
       onDone(`Playlist "${pl.name}" imetengenezwa`);
       onClose();
     } catch (e: any) {

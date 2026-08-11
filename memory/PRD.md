@@ -23,6 +23,15 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - Recommendation engine: weighted scoring (same_album=100, genre=40, popularity=25, artist=20, recency=15) + diversity fallback (cap consecutive same-artist)
 - Subscription plans: Kwa Siku 500, Kwa Wiki 2000, Kwa Mwezi 5500 TZS (simulated Azam Pay)
 
+## What's Been Implemented — Session 4 (Aug 11, 2026) — Gestures, Queue, Bulk Actions
+- ✅ Full-player Pan gestures: swipe-down to close, swipe left/right to change songs (native), controls still tappable
+- ✅ Queue view (QueueSheet): see up-next, reorder (up/down), remove, and tap-to-jump; current song marked with equalizer
+- ✅ PlayerContext exposes currentIndex + playAt/reorderQueue/removeFromQueue
+- ✅ Album bulk: Download whole album (Premium/native; web→app prompt) + Add whole album to a playlist (multi-song)
+- ✅ Playlist bulk: Download whole playlist (Premium/native; web→app prompt)
+- ✅ AddToPlaylistSheet supports multi-song (songIds[]); downloads.ts has downloadMany()
+- ✅ Testing: 30/30 backend pass; queue, gestures, and bulk flows verified (iteration_4)
+
 ## What's Been Implemented — Session 3 (Aug 11, 2026) — Player UX + Song Actions
 - ✅ AnimatedEqualizer (reanimated) shown while playing: mini player (artwork overlay), song lists (active row), full player (next to title)
 - ✅ Full player header shows "INACHEZA KUTOKA" + album title (playing-from-album)

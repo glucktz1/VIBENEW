@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 4 — Queue View + Full-player gestures + Album/Playlist bulk actions. Backend regression: 30/30 pytest PASS (health, home, categories, albums list + detail, songs, search, admin+empty-password admin login + register + /auth/me + wrong-password 401, playback play-increment + recommendations, playlists CRUD + like toggle + liked list + 401 without token, radio, bible books+gen1 verses+audio, neno-la-leo/active, churches list+detail, billing-status, subscription-plans, POST /api/payment/azampay/initiate activates is_premium=true (+ 401 without token), admin stats/users/analytics/create-album+song, non-admin 403). Frontend (Expo web @ 390x844) verified end-to-end: (1) QueueSheet: play a Home song -> mini-player -> tap mini-player -> player -> tap player-queue -> QueueSheet opens titled 'Foleni (10)'. Current row shows equalizer + 'Inacheza'. Up-next rows have queue-item-<i>, queue-up-<i>, queue-down-<i>, queue-remove-<i>. Verified queue-down-1 swaps items 1 and 2, queue-up-2 restores, queue-remove-2 reduces count 10->9, queue-item-3 jumps playback to that song. queue-close dismisses sheet. (2) Full-player gestures: Pan gesture wrapper (react-native-gesture-handler) is mounted around Animated.View; manual controls player-prev, player-toggle, player-next, player-close all still tappable (buttons NOT blocked by gesture wrapper because activeOffsetX/Y=[-24,24] requires 24px of motion before intercepting). Swipe gestures are best-effort on web; not asserted. (3) Album bulk (GUEST): album-play-all, album-download-all, album-add-all all present on album screen. Guest tapping album-download-all -> block-modal 'Pakua Programu ya Vibe' (download-app). Guest tapping album-add-all -> block-modal 'Endelea Kusikiliza ... Ingia au jisajili ...' (guest -> Ingia). Both distinct as expected. (4) Playlist bulk (PREMIUM): pl-download-all present on non-empty playlist detail; on web opens 'Pakua Programu ya Vibe' download-app modal (native-only behavior — expected). (5) Premium happy-path: register fresh user qtest_<ts>@t.com/pass123 -> /plans -> plan-plan_daily -> checkout-phone 0712345678 -> checkout-pay -> /auth/me is_premium=true. Then Tafuta -> album (5 songs) -> album-add-all -> AddToPlaylistSheet -> new-playlist-open -> new-playlist-input 'TEST_AlbumBulk' -> new-playlist-save -> GET /api/playlists shows playlist songs_count=5 (== album songs count). BULK MULTI-SONG ADD VERIFIED. (6) Regression: SongActionsSheet on playlist still shows action-add/action-download/action-like/action-share + action-remove (playlist context). Mini-player prev/play/next present. player header 'INACHEZA KUTOKA' + album title still rendered. LIVE badge on radio unchanged. Deprecated-package warnings: same react-native-web 'props.pointerEvents is deprecated' warning as iter_3 (AnimatedEqualizer.tsx line 41 still uses pointerEvents prop rather than style).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "AnimatedEqualizer.tsx:41", "issue": "Still uses deprecated prop `pointerEvents=\"none\"` (react-native-web warning on every load). Migrate to `style={{ pointerEvents: 'none' }}`. Reference: /app/frontend/src/components/AnimatedEqualizer.tsx:41"}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_vibe_backend.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/iteration_4.json"
+  ],
+  "action_items": [
+    "(Cosmetic, carried over from iter_3) In /app/frontend/src/components/AnimatedEqualizer.tsx replace `<View ... pointerEvents=\"none\">` with `style={{ pointerEvents: 'none' }}` to silence the react-native-web deprecation warning. Not blocking.",
+    "(Minor code-review note) PlayerContext.reorderQueue index-adjustment for non-current items: after splicing out at `from` (from < idx => idx-=1), the `if (to <= idx) idx += 1` branch may over-count when `from < idx && to === idx-1`. Not observed in this test (only up-next items were reordered, so currentIndex was 0 and never affected), but consider a targeted unit test."
+  ],
+  "critical_code_review_comments": [
+    "QueueSheet.tsx: modal correctly renders Foleni (queue.length) header, up-next rows expose queue-item-<i>/queue-up-<i>/queue-down-<i>/queue-remove-<i>, currentIndex row shows AnimatedEqualizer + 'Inacheza' text. queue-close testID present. Verified operations end-to-end.",
+    "PlayerContext.tsx: exposes queue, currentIndex, playAt, reorderQueue, removeFromQueue (all present in ctx value at L448-450). removeFromQueue correctly guards against removing the currently-playing index (L381 i === indexRef.current -> return).",
+    "player.tsx L112-130: Pan gesture uses activeOffsetX/Y=[-24,24] so short taps are not intercepted — all four action buttons (player-prev, player-toggle, player-next, player-close) still tappable through the Animated.View wrapper (confirmed by DOM presence + successful tap flow in QueueSheet test).",
+    "album/[id].tsx L93/97/104: album-play-all + album-download-all + album-add-all testIDs all present. onDownloadAlbum on web -> promptDownloadApp() -> block-modal 'download-app' (verified). onAddAlbumToPlaylist -> gatePremium() -> AddToPlaylistSheet with songIds[] (verified — 5-song album produced 5-song playlist).",
+    "playlist/[id].tsx L101: pl-download-all shown only when pl.songs.length > 0 (correct guard); on web onDownloadAll -> promptDownloadApp() -> download-app modal (verified).",
+    "AddToPlaylistSheet accepts optional songIds[] for bulk add — verified downstream: creating a new playlist from album-add-all correctly bulk-adds all 5 songs (songs_count=5 via GET /api/playlists)."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_4.json (created)",
+    "/app/test_reports/pytest/pytest_results.xml (regenerated)"
+  ],
+  "success_rate": {"backend": "100% (30/30)", "frontend": "100% of requested Queue + gesture-wrapper + album/playlist bulk + premium bulk-add flows verified"},
+  "seed_data_creation": "Registered fresh non-premium users qtest_<ts>@t.com, dl_<ts>@t.com and activated premium via simulated Azam Pay (plan_daily, phone 0712345678). Created playlist 'TEST_AlbumBulk' populated via album-add-all with 5 album songs (verified via /api/playlists songs_count=5).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend base: EXPO_PUBLIC_BACKEND_URL (https://logic-6.preview.emergentagent.com). Admin: admin@vibe.app / Vibe@2026 (or empty). Run: `cd /app/backend && pytest tests/test_vibe_backend.py -v`. For UI use mobile viewport 390x844; clear localStorage between guest runs (vibe_guest_plays / vibe_guest_skips). Web-auth token stored in localStorage as key 'vibe_access_token' (JSON.stringify'd — call JSON.parse if raw). Library playlist testID is `playlist-<id>` (not `lib-playlist-<id>`). AddToPlaylistSheet new-playlist input testID is `new-playlist-input` (not `new-playlist-name`). pl-download-all only renders when playlist has >=1 song (guard in playlist/[id].tsx L95). Gesture wrapper doesn't block short taps because of activeOffsetX/Y=[-24,24]. Swipe gestures + native downloads/lock-screen are native-only — do NOT fail on web preview.",
+  "rca_of_issue": "No blocking bugs. All new features (QueueSheet reorder/remove/jump, full-player Pan gesture wrapper preserving button taps, album bulk play/download/add-all with correct guest/premium gating, playlist pl-download-all with download-app modal on web, bulk multi-song add via AddToPlaylistSheet.songIds) work as specified. Single low-severity cosmetic issue carried over from iter_3: AnimatedEqualizer still uses pointerEvents as a prop instead of style — react-native-web deprecation warning at load, non-functional."
+}

@@ -10,16 +10,19 @@ import { usePlayer, Track } from "@/src/context/PlayerContext";
 import SongRow from "@/src/components/SongRow";
 import AddToPlaylistSheet from "@/src/components/AddToPlaylistSheet";
 import SongActionsSheet from "@/src/components/SongActionsSheet";
+import { downloadMany, isWeb } from "@/src/services/downloads";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 
 export default function AlbumDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { playTrack, current, isPlaying, togglePlay } = usePlayer();
+  const { playTrack, current, isPlaying, togglePlay, gatePremium, promptDownloadApp } = usePlayer();
   const [album, setAlbum] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [sheetSong, setSheetSong] = useState<string | null>(null);
   const [actionSong, setActionSong] = useState<any | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [downloadingAll, setDownloadingAll] = useState(false);
   const [toast, setToast] = useState("");
 
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(""), 2200); };
@@ -45,6 +48,21 @@ export default function AlbumDetail() {
   const playOne = (s: any) => {
     const q = album.songs.map(toTrack);
     playTrack(toTrack(s), q);
+  };
+
+  const flashMsg = flash;
+
+  const onDownloadAlbum = async () => {
+    if (isWeb) { promptDownloadApp(); return; }
+    if (!gatePremium()) return;
+    setDownloadingAll(true);
+    const n = await downloadMany(album.songs.map(toTrack));
+    setDownloadingAll(false);
+    flashMsg(`Nyimbo ${n} zimepakuliwa`);
+  };
+
+  const onAddAlbumToPlaylist = () => {
+    if (gatePremium()) setBulkOpen(true);
   };
 
   if (loading || !album) {
@@ -75,6 +93,16 @@ export default function AlbumDetail() {
             <Pressable testID="album-play-all" style={styles.playAll} onPress={albumPlaying ? togglePlay : playAll}>
               <Ionicons name={albumPlaying && isPlaying ? "pause" : "play"} size={24} color="#fff" />
               <Text style={styles.playAllText}>{albumPlaying && isPlaying ? "Simamisha" : "Cheza Zote"}</Text>
+            </Pressable>
+            <Pressable testID="album-download-all" style={styles.iconAct} onPress={onDownloadAlbum} disabled={downloadingAll}>
+              {downloadingAll ? (
+                <ActivityIndicator color={COLORS.text} size="small" />
+              ) : (
+                <Ionicons name="download-outline" size={24} color={COLORS.text} />
+              )}
+            </Pressable>
+            <Pressable testID="album-add-all" style={styles.iconAct} onPress={onAddAlbumToPlaylist}>
+              <Ionicons name="add-circle-outline" size={26} color={COLORS.text} />
             </Pressable>
           </View>
 
@@ -110,6 +138,14 @@ export default function AlbumDetail() {
         onClose={() => setSheetSong(null)}
         onDone={flash}
       />
+
+      <AddToPlaylistSheet
+        songId={null}
+        songIds={album?.songs?.map((s: any) => s.song_id) || []}
+        visible={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        onDone={flash}
+      />
     </View>
   );
 }
@@ -128,6 +164,7 @@ const styles = StyleSheet.create({
   actions: { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACING.md, marginTop: SPACING.md },
   playAll: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.primary, borderRadius: RADIUS.full, paddingHorizontal: SPACING.lg, height: 50 },
   playAllText: { color: "#fff", fontSize: FONT.lg, fontWeight: "800", marginLeft: SPACING.sm },
+  iconAct: { width: 50, height: 50, borderRadius: 25, alignItems: "center", justifyContent: "center", marginLeft: SPACING.md, backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border },
   list: { paddingHorizontal: SPACING.md, marginTop: SPACING.md },
   songWrap: { flexDirection: "row", alignItems: "center" },
   likeBtn: { padding: SPACING.xs, marginLeft: 2 },

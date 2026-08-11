@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, GestureResponderEvent, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from "react-native-reanimated";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -11,6 +13,7 @@ import { libraryApi } from "@/src/services/api";
 import { isDownloaded, downloadTrack, removeDownload, isWeb } from "@/src/services/downloads";
 import { shareItem } from "@/src/services/share";
 import AddToPlaylistSheet from "@/src/components/AddToPlaylistSheet";
+import QueueSheet from "@/src/components/QueueSheet";
 import AnimatedEqualizer from "@/src/components/AnimatedEqualizer";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 
@@ -30,7 +33,15 @@ export default function Player() {
   const [downloaded, setDownloaded] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
+  const [showQueue, setShowQueue] = useState(false);
   const [toast, setToast] = useState("");
+
+  const tx = useSharedValue(0);
+  const ty = useSharedValue(0);
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: tx.value }, { translateY: ty.value }],
+    opacity: 1 - Math.min(0.35, Math.abs(ty.value) / 900),
+  }));
 
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(""), 2000); };
 
@@ -94,9 +105,35 @@ export default function Player() {
     if (gatePremium()) setShowPlaylist(true);
   };
 
+  const doClose = () => router.back();
+  const doNext = () => next();
+  const doPrev = () => prev();
+
+  const pan = Gesture.Pan()
+    .activeOffsetX([-24, 24])
+    .activeOffsetY([-24, 24])
+    .onUpdate((e) => {
+      tx.value = e.translationX;
+      ty.value = e.translationY > 0 ? e.translationY : e.translationY * 0.12;
+    })
+    .onEnd((e) => {
+      const CLOSE = 130;
+      const SWIPE = 90;
+      if (e.translationY > CLOSE && e.translationY > Math.abs(e.translationX)) {
+        runOnJS(doClose)();
+      } else if (Math.abs(e.translationX) > SWIPE && Math.abs(e.translationX) >= Math.abs(e.translationY)) {
+        if (e.translationX < 0) runOnJS(doNext)();
+        else runOnJS(doPrev)();
+      }
+      tx.value = withSpring(0);
+      ty.value = withSpring(0);
+    });
+
   return (
     <View style={styles.root}>
       <LinearGradient colors={[COLORS.primaryDark, COLORS.background, COLORS.background]} style={StyleSheet.absoluteFill} />
+      <GestureDetector gesture={pan}>
+        <Animated.View style={[{ flex: 1 }, animStyle]}>
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.header}>
           <Pressable testID="player-close" onPress={() => router.back()} hitSlop={10}>
@@ -106,7 +143,9 @@ export default function Player() {
             <Text style={styles.headerLabel}>{isLive ? "REDIO" : "INACHEZA KUTOKA"}</Text>
             <Text style={styles.headerAlbum} numberOfLines={1}>{current.album_title || current.artist_name || "Vibe"}</Text>
           </View>
-          <View style={{ width: 30 }} />
+          <Pressable testID="player-queue" onPress={() => setShowQueue(true)} hitSlop={10}>
+            <Ionicons name="list" size={26} color={COLORS.text} />
+          </Pressable>
         </View>
 
         <View style={styles.artWrap}>
@@ -204,6 +243,8 @@ export default function Player() {
           </Pressable>
         </View>
       </SafeAreaView>
+        </Animated.View>
+      </GestureDetector>
 
       {toast ? <View style={styles.toast}><Text style={styles.toastText}>{toast}</Text></View> : null}
 
@@ -213,6 +254,8 @@ export default function Player() {
         onClose={() => setShowPlaylist(false)}
         onDone={(m) => flash(m)}
       />
+
+      <QueueSheet visible={showQueue} onClose={() => setShowQueue(false)} />
     </View>
   );
 }

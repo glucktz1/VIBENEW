@@ -52,6 +52,17 @@ export async function downloadTrack(track: any): Promise<DownloadedTrack> {
   return entry;
 }
 
+export async function downloadMany(tracks: any[]): Promise<number> {
+  let count = 0;
+  for (const t of tracks) {
+    try {
+      await downloadTrack(t);
+      count += 1;
+    } catch {}
+  }
+  return count;
+}
+
 export async function removeDownload(songId: string): Promise<void> {
   const map = await getDownloads();
   const entry = map[songId];

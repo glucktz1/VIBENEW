@@ -26,6 +26,7 @@ type PlayerCtx = {
   position: number;
   duration: number;
   queue: Track[];
+  currentIndex: number;
   previewMode: boolean;
   blockReason: BlockReason;
   clearBlock: () => void;
@@ -37,6 +38,9 @@ type PlayerCtx = {
   prev: () => Promise<void>;
   seek: (sec: number) => void;
   stop: () => void;
+  playAt: (i: number) => void;
+  reorderQueue: (from: number, to: number) => void;
+  removeFromQueue: (i: number) => void;
 };
 
 const Ctx = createContext<PlayerCtx>({} as PlayerCtx);
@@ -57,6 +61,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const [queue, setQueue] = useState<Track[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [previewMode, setPreviewMode] = useState(false);
   const [blockReason, setBlockReason] = useState<BlockReason>(null);
   const [billing, setBilling] = useState<any>({
@@ -179,6 +184,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       attachListener(player);
       setCurrent(track);
       currentRef.current = track;
+      setCurrentIndex(indexRef.current);
       setPosition(0);
       setDuration(track.duration || 0);
       player.play();
@@ -343,6 +349,45 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setDuration(0);
   }, []);
 
+  const playAt = useCallback(
+    (i: number) => {
+      const q = queueRef.current;
+      if (i < 0 || i >= q.length) return;
+      indexRef.current = i;
+      loadAndPlay(q[i]);
+    },
+    [loadAndPlay]
+  );
+
+  const reorderQueue = useCallback((from: number, to: number) => {
+    const q = [...queueRef.current];
+    if (from < 0 || to < 0 || from >= q.length || to >= q.length || from === to) return;
+    const [moved] = q.splice(from, 1);
+    q.splice(to, 0, moved);
+    queueRef.current = q;
+    setQueue(q);
+    let idx = indexRef.current;
+    if (from === idx) idx = to;
+    else {
+      if (from < idx) idx -= 1;
+      if (to <= idx) idx += 1;
+    }
+    indexRef.current = idx;
+    setCurrentIndex(idx);
+  }, []);
+
+  const removeFromQueue = useCallback((i: number) => {
+    const q = [...queueRef.current];
+    if (i < 0 || i >= q.length || i === indexRef.current) return;
+    q.splice(i, 1);
+    queueRef.current = q;
+    setQueue(q);
+    if (i < indexRef.current) {
+      indexRef.current -= 1;
+      setCurrentIndex(indexRef.current);
+    }
+  }, []);
+
   // ---- Web lock-screen / media-key controls (MediaSession API) ----
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -388,6 +433,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         position,
         duration,
         queue,
+        currentIndex,
         previewMode,
         blockReason,
         clearBlock: () => setBlockReason(null),
@@ -399,6 +445,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         prev,
         seek,
         stop,
+        playAt,
+        reorderQueue,
+        removeFromQueue,
       }}
     >
       {children}
