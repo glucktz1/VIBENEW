@@ -23,6 +23,16 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - Recommendation engine: weighted scoring (same_album=100, genre=40, popularity=25, artist=20, recency=15) + diversity fallback (cap consecutive same-artist)
 - Subscription plans: Kwa Siku 500, Kwa Wiki 2000, Kwa Mwezi 5500 TZS (simulated Azam Pay)
 
+## What's Been Implemented — Session 3 (Aug 11, 2026) — Player UX + Song Actions
+- ✅ AnimatedEqualizer (reanimated) shown while playing: mini player (artwork overlay), song lists (active row), full player (next to title)
+- ✅ Full player header shows "INACHEZA KUTOKA" + album title (playing-from-album)
+- ✅ Full player action row: like, add-to-playlist (+), share, download
+- ✅ Three-dots (...) SongActionsSheet on album & playlist rows: Add-to-playlist, Download, Like, Share (+ Remove on playlists)
+- ✅ Share service (native Share + web navigator.share/clipboard) with vibe.app links
+- ✅ Mini player: back / play-pause / forward controls
+- ✅ Web MediaSession lock-screen/media-key controls (play/pause/next/prev + metadata); native lock-screen needs a build
+- ✅ Testing: 30/30 backend pass; all equalizer/song-action/share/media-session flows verified
+
 ## What's Been Implemented — Session 2 (Aug 11, 2026) — Monetization Audit
 - ✅ Guest limits enforced (5 plays / 5 skips) on manual play AND auto-advance, independent of billing
 - ✅ Premium gating via `gatePremium()` for: like, add-to-playlist, create playlist, download

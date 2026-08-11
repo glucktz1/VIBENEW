@@ -4,6 +4,7 @@ import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 import { usePlayer } from "@/src/context/PlayerContext";
+import AnimatedEqualizer from "@/src/components/AnimatedEqualizer";
 
 export default function SongRow({
   song,
@@ -34,8 +35,10 @@ export default function SongRow({
           {song.artist_name || song.album_title || "Vibe"}
         </Text>
       </View>
-      {isActive && isPlaying ? (
-        <Ionicons name="volume-medium" size={18} color={COLORS.primary} style={{ marginRight: SPACING.sm }} />
+      {isActive ? (
+        <View style={{ marginRight: SPACING.sm }}>
+          <AnimatedEqualizer playing={isPlaying} color={COLORS.primary} size={16} />
+        </View>
       ) : null}
       {onMore ? (
         <Pressable testID={`song-more-${song.song_id}`} onPress={onMore} hitSlop={10} style={styles.more}>

@@ -4,10 +4,11 @@ import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { usePlayer } from "@/src/context/PlayerContext";
+import AnimatedEqualizer from "@/src/components/AnimatedEqualizer";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 
 export default function MiniPlayer({ bottomOffset = 0 }: { bottomOffset?: number }) {
-  const { current, isPlaying, togglePlay, next, isBuffering, position, duration } = usePlayer();
+  const { current, isPlaying, togglePlay, next, prev, isBuffering, position, duration } = usePlayer();
   const router = useRouter();
   if (!current) return null;
 
@@ -23,7 +24,14 @@ export default function MiniPlayer({ bottomOffset = 0 }: { bottomOffset?: number
         <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
       </View>
       <View style={styles.row}>
-        <Image source={{ uri: current.thumbnail }} style={styles.art} contentFit="cover" transition={200} />
+        <View>
+          <Image source={{ uri: current.thumbnail }} style={styles.art} contentFit="cover" transition={200} />
+          {isPlaying ? (
+            <View style={styles.eqOverlay}>
+              <AnimatedEqualizer playing={isPlaying} color="#fff" size={16} />
+            </View>
+          ) : null}
+        </View>
         <View style={styles.meta}>
           <Text style={styles.title} numberOfLines={1}>
             {current.title}
@@ -32,6 +40,9 @@ export default function MiniPlayer({ bottomOffset = 0 }: { bottomOffset?: number
             {current.artist_name || current.album_title || "Vibe"}
           </Text>
         </View>
+        <Pressable testID="mini-prev" onPress={() => prev()} hitSlop={8} style={styles.btn}>
+          <Ionicons name="play-skip-back" size={20} color={COLORS.text} />
+        </Pressable>
         <Pressable testID="mini-play-toggle" onPress={togglePlay} hitSlop={10} style={styles.btn}>
           {isBuffering ? (
             <ActivityIndicator color={COLORS.text} />
@@ -40,7 +51,7 @@ export default function MiniPlayer({ bottomOffset = 0 }: { bottomOffset?: number
           )}
         </Pressable>
         <Pressable testID="mini-next" onPress={() => next()} hitSlop={10} style={styles.btn}>
-          <Ionicons name="play-skip-forward" size={22} color={COLORS.text} />
+          <Ionicons name="play-skip-forward" size={20} color={COLORS.text} />
         </Pressable>
       </View>
     </Pressable>
@@ -62,8 +73,9 @@ const styles = StyleSheet.create({
   progressFill: { height: 2, backgroundColor: COLORS.primary },
   row: { flexDirection: "row", alignItems: "center", padding: SPACING.sm },
   art: { width: 44, height: 44, borderRadius: RADIUS.md, backgroundColor: COLORS.surface },
+  eqOverlay: { position: "absolute", top: 0, left: 0, width: 44, height: 44, borderRadius: RADIUS.md, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" },
   meta: { flex: 1, marginLeft: SPACING.sm },
   title: { color: COLORS.text, fontSize: FONT.md, fontWeight: "700" },
   artist: { color: COLORS.textSecondary, fontSize: FONT.sm, marginTop: 2 },
-  btn: { paddingHorizontal: SPACING.sm },
+  btn: { paddingHorizontal: SPACING.xs },
 });

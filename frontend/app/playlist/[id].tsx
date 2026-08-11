@@ -8,6 +8,8 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { libraryApi } from "@/src/services/api";
 import { usePlayer, Track } from "@/src/context/PlayerContext";
 import SongRow from "@/src/components/SongRow";
+import SongActionsSheet from "@/src/components/SongActionsSheet";
+import AddToPlaylistSheet from "@/src/components/AddToPlaylistSheet";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 
 export default function PlaylistDetail() {
@@ -16,6 +18,11 @@ export default function PlaylistDetail() {
   const { playTrack } = usePlayer();
   const [pl, setPl] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [actionSong, setActionSong] = useState<any | null>(null);
+  const [sheetSong, setSheetSong] = useState<string | null>(null);
+  const [toast, setToast] = useState("");
+
+  const flash = (m: string) => { setToast(m); setTimeout(() => setToast(""), 2200); };
 
   const load = useCallback(async () => {
     try {
@@ -84,7 +91,12 @@ export default function PlaylistDetail() {
           <View style={{ paddingHorizontal: SPACING.md }}>
             {pl.songs?.length ? (
               pl.songs.map((s: any) => (
-                <SongRow key={s.song_id} song={s} onPress={() => playTrack(toTrack(s), pl.songs.map(toTrack))} onMore={() => remove(s.song_id)} />
+                <SongRow
+                  key={s.song_id}
+                  song={s}
+                  onPress={() => playTrack(toTrack(s), pl.songs.map(toTrack))}
+                  onMore={() => setActionSong(s)}
+                />
               ))
             ) : (
               <Text style={styles.empty}>Playlist hii haina nyimbo bado.</Text>
@@ -92,6 +104,24 @@ export default function PlaylistDetail() {
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      {toast ? <View style={styles.toast}><Text style={styles.toastText}>{toast}</Text></View> : null}
+
+      <SongActionsSheet
+        song={actionSong}
+        visible={!!actionSong}
+        onClose={() => setActionSong(null)}
+        onAddToPlaylist={(sng) => setSheetSong(sng.song_id)}
+        onToast={flash}
+        extraActions={actionSong ? [{ key: "remove", icon: "remove-circle-outline", label: "Ondoa kwenye playlist", onPress: () => remove(actionSong.song_id) }] : []}
+      />
+
+      <AddToPlaylistSheet
+        songId={sheetSong}
+        visible={!!sheetSong}
+        onClose={() => setSheetSong(null)}
+        onDone={flash}
+      />
     </View>
   );
 }
@@ -109,4 +139,6 @@ const styles = StyleSheet.create({
   playAll: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.primary, borderRadius: RADIUS.full, paddingHorizontal: SPACING.xl, height: 48, marginTop: SPACING.md },
   playAllText: { color: "#fff", fontSize: FONT.lg, fontWeight: "800", marginLeft: SPACING.sm },
   empty: { color: COLORS.textMuted, textAlign: "center", marginTop: SPACING.xl },
+  toast: { position: "absolute", bottom: 40, left: SPACING.lg, right: SPACING.lg, backgroundColor: COLORS.card, borderRadius: RADIUS.md, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.border },
+  toastText: { color: COLORS.text, textAlign: "center", fontWeight: "600" },
 });

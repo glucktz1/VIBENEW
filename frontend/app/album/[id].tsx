@@ -5,35 +5,32 @@ import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { musicApi, libraryApi } from "@/src/services/api";
-import { useAuth } from "@/src/context/AuthContext";
+import { musicApi } from "@/src/services/api";
 import { usePlayer, Track } from "@/src/context/PlayerContext";
 import SongRow from "@/src/components/SongRow";
 import AddToPlaylistSheet from "@/src/components/AddToPlaylistSheet";
+import SongActionsSheet from "@/src/components/SongActionsSheet";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 
 export default function AlbumDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { isGuest, user } = useAuth();
-  const { playTrack, current, isPlaying, togglePlay, gatePremium } = usePlayer();
+  const { playTrack, current, isPlaying, togglePlay } = usePlayer();
   const [album, setAlbum] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [likedIds, setLikedIds] = useState<string[]>([]);
   const [sheetSong, setSheetSong] = useState<string | null>(null);
+  const [actionSong, setActionSong] = useState<any | null>(null);
   const [toast, setToast] = useState("");
+
+  const flash = (m: string) => { setToast(m); setTimeout(() => setToast(""), 2200); };
 
   const load = useCallback(async () => {
     try {
       const a = await musicApi.album(String(id));
       setAlbum(a);
-      if (!isGuest) {
-        const liked = await libraryApi.liked();
-        setLikedIds(liked.map((s: any) => s.song_id));
-      }
     } catch {}
     setLoading(false);
-  }, [id, isGuest]);
+  }, [id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -48,14 +45,6 @@ export default function AlbumDetail() {
   const playOne = (s: any) => {
     const q = album.songs.map(toTrack);
     playTrack(toTrack(s), q);
-  };
-
-  const toggleLike = async (songId: string) => {
-    if (!gatePremium()) return;
-    try {
-      const res = await libraryApi.toggleLike(songId);
-      setLikedIds((prev) => res.liked ? [...prev, songId] : prev.filter((i) => i !== songId));
-    } catch {}
   };
 
   if (loading || !album) {
@@ -91,17 +80,13 @@ export default function AlbumDetail() {
 
           <View style={styles.list}>
             {album.songs.map((s: any, i: number) => (
-              <View key={s.song_id} style={styles.songWrap}>
-                <View style={{ flex: 1 }}>
-                  <SongRow song={{ ...s, artist_name: album.artist_name }} index={i} onPress={() => playOne(s)} />
-                </View>
-                <Pressable testID={`album-like-${s.song_id}`} onPress={() => toggleLike(s.song_id)} hitSlop={8} style={styles.likeBtn}>
-                  <Ionicons name={likedIds.includes(s.song_id) ? "heart" : "heart-outline"} size={20} color={likedIds.includes(s.song_id) ? COLORS.error : COLORS.textMuted} />
-                </Pressable>
-                <Pressable testID={`album-add-${s.song_id}`} onPress={() => { if (gatePremium()) { setSheetSong(s.song_id); } }} hitSlop={8} style={styles.likeBtn}>
-                  <Ionicons name="add-circle-outline" size={20} color={COLORS.textMuted} />
-                </Pressable>
-              </View>
+              <SongRow
+                key={s.song_id}
+                song={{ ...s, artist_name: album.artist_name, album_title: album.title }}
+                index={i}
+                onPress={() => playOne(s)}
+                onMore={() => setActionSong({ ...s, artist_name: album.artist_name, album_title: album.title, thumbnail: s.thumbnail || album.thumbnail })}
+              />
             ))}
           </View>
         </ScrollView>
@@ -111,11 +96,19 @@ export default function AlbumDetail() {
         <View style={styles.toast}><Text style={styles.toastText}>{toast}</Text></View>
       ) : null}
 
+      <SongActionsSheet
+        song={actionSong}
+        visible={!!actionSong}
+        onClose={() => setActionSong(null)}
+        onAddToPlaylist={(sng) => setSheetSong(sng.song_id)}
+        onToast={flash}
+      />
+
       <AddToPlaylistSheet
         songId={sheetSong}
         visible={!!sheetSong}
         onClose={() => setSheetSong(null)}
-        onDone={(m) => { setToast(m); setTimeout(() => setToast(""), 2200); }}
+        onDone={flash}
       />
     </View>
   );

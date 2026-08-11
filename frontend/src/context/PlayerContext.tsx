@@ -337,10 +337,47 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     } catch {}
     playerRef.current = null;
     setCurrent(null);
+    currentRef.current = null;
     setIsPlaying(false);
     setPosition(0);
     setDuration(0);
   }, []);
+
+  // ---- Web lock-screen / media-key controls (MediaSession API) ----
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const ms: any = (typeof navigator !== "undefined" && (navigator as any).mediaSession) || null;
+    if (!ms || typeof (window as any).MediaMetadata === "undefined") return;
+    if (!current) return;
+    try {
+      ms.metadata = new (window as any).MediaMetadata({
+        title: current.title,
+        artist: current.artist_name || "Vibe",
+        album: current.album_title || "Vibe",
+        artwork: current.thumbnail
+          ? [{ src: current.thumbnail, sizes: "512x512", type: "image/jpeg" }]
+          : [],
+      });
+    } catch {}
+  }, [current]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const ms: any = (typeof navigator !== "undefined" && (navigator as any).mediaSession) || null;
+    if (!ms) return;
+    try {
+      ms.setActionHandler("play", () => togglePlay());
+      ms.setActionHandler("pause", () => togglePlay());
+      ms.setActionHandler("nexttrack", () => next());
+      ms.setActionHandler("previoustrack", () => prev());
+    } catch {}
+  }, [togglePlay, next, prev]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const ms: any = (typeof navigator !== "undefined" && (navigator as any).mediaSession) || null;
+    if (ms) ms.playbackState = isPlaying ? "playing" : "paused";
+  }, [isPlaying]);
 
   return (
     <Ctx.Provider
