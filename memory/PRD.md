@@ -23,6 +23,12 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - Recommendation engine: weighted scoring (same_album=100, genre=40, popularity=25, artist=20, recency=15) + diversity fallback (cap consecutive same-artist)
 - Subscription plans: Kwa Siku 500, Kwa Wiki 2000, Kwa Mwezi 5500 TZS (simulated Azam Pay)
 
+## What's Been Implemented — Session 5 (Aug 11, 2026) — Share Cards, Continue Listening, Downloads Manager
+- ✅ Share Cards: branded gradient image card (Vibe logo, art, title, artist, tagline) via react-native-view-shot + expo-sharing; web falls back to link share (navigator.share/clipboard)
+- ✅ Continue Listening: PlayerContext persists session snapshot (track+queue+index+position) to storage; restores on launch (paused) and resumes+seeks on play
+- ✅ Downloads Manager: total storage used (formatBytes) + one-tap clear-all with confirm; per-download size stored (native)
+- ✅ Testing: 30/30 backend pass; share/continue/downloads flows verified (iteration_5)
+
 ## What's Been Implemented — Session 4 (Aug 11, 2026) — Gestures, Queue, Bulk Actions
 - ✅ Full-player Pan gestures: swipe-down to close, swipe left/right to change songs (native), controls still tappable
 - ✅ Queue view (QueueSheet): see up-next, reorder (up/down), remove, and tap-to-jump; current song marked with equalizer

@@ -11,9 +11,9 @@ import { usePlayer } from "@/src/context/PlayerContext";
 import { useAuth } from "@/src/context/AuthContext";
 import { libraryApi } from "@/src/services/api";
 import { isDownloaded, downloadTrack, removeDownload, isWeb } from "@/src/services/downloads";
-import { shareItem } from "@/src/services/share";
 import AddToPlaylistSheet from "@/src/components/AddToPlaylistSheet";
 import QueueSheet from "@/src/components/QueueSheet";
+import ShareCardModal from "@/src/components/ShareCardModal";
 import AnimatedEqualizer from "@/src/components/AnimatedEqualizer";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 
@@ -34,6 +34,7 @@ export default function Player() {
   const [downloading, setDownloading] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const [toast, setToast] = useState("");
 
   const tx = useSharedValue(0);
@@ -97,8 +98,7 @@ export default function Player() {
   const showChangiaBanner = !isGuest && !isPremium;
 
   const onShare = async () => {
-    const r = await shareItem({ type: "song", id: current.song_id, title: current.title, subtitle: current.artist_name });
-    if (r === "copied") flash("Kiungo kimenakiliwa");
+    setShowShare(true);
   };
 
   const onAddToPlaylist = () => {
@@ -256,6 +256,13 @@ export default function Player() {
       />
 
       <QueueSheet visible={showQueue} onClose={() => setShowQueue(false)} />
+
+      <ShareCardModal
+        song={current}
+        visible={showShare}
+        onClose={() => setShowShare(false)}
+        onToast={(m) => flash(m)}
+      />
     </View>
   );
 }

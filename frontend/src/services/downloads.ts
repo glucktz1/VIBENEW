@@ -16,6 +16,7 @@ export type DownloadedTrack = {
   album_title?: string;
   duration?: number;
   localUri: string;
+  size?: number;
 };
 
 export const isWeb = Platform.OS === "web";
@@ -36,6 +37,11 @@ export async function downloadTrack(track: any): Promise<DownloadedTrack> {
   } catch {}
   const path = `${DIR}${track.song_id}.mp3`;
   await FileSystem.downloadAsync(track.audio_url, path);
+  let size = 0;
+  try {
+    const info = await FileSystem.getInfoAsync(path, { size: true });
+    size = (info as any).size || 0;
+  } catch {}
   const map = await getDownloads();
   const entry: DownloadedTrack = {
     song_id: track.song_id,
@@ -46,6 +52,7 @@ export async function downloadTrack(track: any): Promise<DownloadedTrack> {
     album_title: track.album_title,
     duration: track.duration,
     localUri: path,
+    size,
   };
   map[track.song_id] = entry;
   await storage.setItem(DL_KEY, map);
@@ -78,4 +85,26 @@ export async function removeDownload(songId: string): Promise<void> {
 export async function listDownloads(): Promise<DownloadedTrack[]> {
   const map = await getDownloads();
   return Object.values(map);
+}
+
+export async function getDownloadsSize(): Promise<number> {
+  const map = await getDownloads();
+  return Object.values(map).reduce((sum, e) => sum + (e.size || 0), 0);
+}
+
+export async function clearAllDownloads(): Promise<void> {
+  if (!isWeb) {
+    try {
+      await FileSystem.deleteAsync(DIR, { idempotent: true });
+    } catch {}
+  }
+  await storage.setItem(DL_KEY, {});
+}
+
+export function formatBytes(bytes: number): string {
+  if (!bytes) return "0 MB";
+  const mb = bytes / (1024 * 1024);
+  if (mb < 1) return `${(bytes / 1024).toFixed(0)} KB`;
+  if (mb < 1024) return `${mb.toFixed(1)} MB`;
+  return `${(mb / 1024).toFixed(2)} GB`;
 }

@@ -38,7 +38,7 @@ export default function AnimatedEqualizer({
   size?: number;
 }) {
   return (
-    <View style={[styles.wrap, { width: size + 2, height: size, pointerEvents: "none" }]}>
+    <View style={[styles.wrap, { width: size + 2, height: size }]}>
       <Bar delay={0} color={color} playing={playing} size={size} />
       <Bar delay={130} color={color} playing={playing} size={size} />
       <Bar delay={260} color={color} playing={playing} size={size} />

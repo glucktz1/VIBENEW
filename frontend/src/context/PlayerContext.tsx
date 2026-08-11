@@ -48,6 +48,7 @@ export const usePlayer = () => useContext(Ctx);
 
 const GUEST_PLAY_KEY = "vibe_guest_plays";
 const GUEST_SKIP_KEY = "vibe_guest_skips";
+const SESSION_KEY = "vibe_last_session";
 
 // Preview pattern for non-premium after skips exhausted: 15s,15s,15s,FULL...
 const PREVIEW_PATTERN = [15, 15, 15, 0];
@@ -74,6 +75,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const playerRef = useRef<AudioPlayer | null>(null);
   const queueRef = useRef<Track[]>([]);
   const currentRef = useRef<Track | null>(null);
+  const positionRef = useRef(0);
+  const resumePosRef = useRef(0);
+  const lastSaveRef = useRef(0);
   const indexRef = useRef(0);
   const previewRef = useRef(false);
   const previewCountRef = useRef(0);
@@ -101,6 +105,22 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       } catch {}
       guestPlaysRef.current = (await storage.getItem<number>(GUEST_PLAY_KEY, 0)) || 0;
       guestSkipsRef.current = (await storage.getItem<number>(GUEST_SKIP_KEY, 0)) || 0;
+      // Continue Listening: restore last session (paused, ready to resume)
+      try {
+        const snap = await storage.getItem<any>(SESSION_KEY, null);
+        if (snap && snap.track && snap.track.audio_url) {
+          queueRef.current = snap.queue?.length ? snap.queue : [snap.track];
+          indexRef.current = snap.index || 0;
+          currentRef.current = snap.track;
+          resumePosRef.current = snap.position || 0;
+          positionRef.current = snap.position || 0;
+          setQueue(queueRef.current);
+          setCurrentIndex(indexRef.current);
+          setCurrent(snap.track);
+          setDuration(snap.track.duration || 0);
+          setPosition(snap.position || 0);
+        }
+      } catch {}
     })();
     return () => {
       try {
@@ -148,11 +168,32 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return () => sub.remove();
   }, [billing]);
 
+  const saveSession = useCallback(async () => {
+    const t = currentRef.current;
+    if (!t) return;
+    try {
+      await storage.setItem(SESSION_KEY, {
+        track: t,
+        queue: queueRef.current,
+        index: indexRef.current,
+        position: positionRef.current,
+      });
+    } catch {}
+  }, []);
+
   const attachListener = useCallback((player: AudioPlayer) => {
     player.addListener("playbackStatusUpdate", (status: any) => {
       if (!status) return;
       if (typeof status.isLoaded === "boolean") setIsBuffering(!status.isLoaded);
-      if (typeof status.currentTime === "number") setPosition(status.currentTime);
+      if (typeof status.currentTime === "number") {
+        setPosition(status.currentTime);
+        positionRef.current = status.currentTime;
+        const nowSec = Math.floor(status.currentTime);
+        if (nowSec - lastSaveRef.current >= 5) {
+          lastSaveRef.current = nowSec;
+          void saveSession();
+        }
+      }
       if (typeof status.duration === "number" && status.duration > 0) setDuration(status.duration);
       if (typeof status.playing === "boolean") setIsPlaying(status.playing);
 
@@ -186,18 +227,27 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       currentRef.current = track;
       setCurrentIndex(indexRef.current);
       setPosition(0);
+      positionRef.current = 0;
+      lastSaveRef.current = 0;
       setDuration(track.duration || 0);
       player.play();
       setIsPlaying(true);
+      // Resume from saved position (Continue Listening)
+      if (resumePosRef.current > 2) {
+        const pos = resumePosRef.current;
+        resumePosRef.current = 0;
+        setTimeout(() => { try { player.seekTo(pos); } catch {} }, 300);
+      }
       // track play for analytics + recommendations
       musicApi.trackPlay(track.song_id).catch(() => {});
+      void saveSession();
 
       // preview counting
       if (previewRef.current) {
         previewCountRef.current += 1;
       }
     },
-    [attachListener]
+    [attachListener, saveSession]
   );
 
   // core "advance" used by next() and auto-advance on finish
@@ -300,15 +350,20 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const togglePlay = useCallback(() => {
     const p = playerRef.current;
-    if (!p) return;
+    if (!p) {
+      // Resume a restored "Continue Listening" session
+      if (currentRef.current) loadAndPlay(currentRef.current);
+      return;
+    }
     if (isPlaying) {
       p.pause();
       setIsPlaying(false);
+      void saveSession();
     } else {
       p.play();
       setIsPlaying(true);
     }
-  }, [isPlaying]);
+  }, [isPlaying, loadAndPlay, saveSession]);
 
   const next = useCallback(() => handleNext(false), [handleNext]);
 
