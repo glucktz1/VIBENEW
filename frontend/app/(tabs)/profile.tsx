@@ -13,6 +13,7 @@ export default function Profile() {
 
   const rows = [
     { key: "plans", label: "Kifurushi & Malipo", icon: "star", route: "/plans" },
+    { key: "downloads", label: "Nyimbo Zilizopakuliwa", icon: "cloud-download", route: "/downloads" },
     { key: "neno", label: "Neno la Leo", icon: "sunny", route: "/neno" },
     { key: "churches", label: "Makanisa", icon: "business", route: "/churches" },
     { key: "radio", label: "Redio", icon: "radio", route: "/radio" },

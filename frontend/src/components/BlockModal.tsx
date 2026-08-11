@@ -11,36 +11,41 @@ export default function BlockModal() {
   const router = useRouter();
   const visible = blockReason !== null;
   const isGuest = blockReason === "guest";
+  const isDownloadApp = blockReason === "download-app";
+
+  const title = isGuest ? "Endelea Kusikiliza" : isDownloadApp ? "Pakua Programu ya Vibe" : "Nenda Premium";
+  const body = isGuest
+    ? "Umefikia kikomo cha bila malipo. Ingia au jisajili ili kuendelea kusikiliza bila kikomo."
+    : isDownloadApp
+    ? "Kupakua nyimbo na kusikiliza bila mtandao, tumia programu ya Vibe kwenye simu yako (Android/iOS)."
+    : "Umefikia kikomo. Changia ili usikilize bila kikomo, bila matangazo, na upakue nyimbo.";
+  const primaryLabel = isGuest ? "Ingia" : isDownloadApp ? "Sawa" : "Changia Sasa";
+  const iconName = isGuest ? "lock-closed" : isDownloadApp ? "cloud-download" : "star";
+
+  const onPrimary = () => {
+    clearBlock();
+    if (isGuest) router.push("/(auth)/login");
+    else if (!isDownloadApp) router.push("/plans");
+  };
 
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={clearBlock}>
       <View style={styles.overlay}>
         <View testID="block-modal" style={styles.card}>
           <View style={styles.iconWrap}>
-            <Ionicons name={isGuest ? "lock-closed" : "star"} size={34} color={COLORS.primary} />
+            <Ionicons name={iconName as any} size={34} color={COLORS.primary} />
           </View>
-          <Text style={styles.title}>
-            {isGuest ? "Endelea Kusikiliza" : "Nenda Premium"}
-          </Text>
-          <Text style={styles.body}>
-            {isGuest
-              ? "Umefikia kikomo cha bila malipo. Ingia au jisajili ili kuendelea kusikiliza bila kikomo."
-              : "Umefikia kikomo cha kuruka nyimbo. Changia ili usikilize bila kikomo na bila matangazo."}
-          </Text>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.body}>{body}</Text>
 
-          <Pressable
-            testID="block-primary"
-            style={styles.primary}
-            onPress={() => {
-              clearBlock();
-              router.push(isGuest ? "/(auth)/login" : "/plans");
-            }}
-          >
-            <Text style={styles.primaryText}>{isGuest ? "Ingia" : "Changia Sasa"}</Text>
+          <Pressable testID="block-primary" style={styles.primary} onPress={onPrimary}>
+            <Text style={styles.primaryText}>{primaryLabel}</Text>
           </Pressable>
-          <Pressable testID="block-dismiss" style={styles.ghost} onPress={clearBlock}>
-            <Text style={styles.ghostText}>Baadaye</Text>
-          </Pressable>
+          {!isDownloadApp ? (
+            <Pressable testID="block-dismiss" style={styles.ghost} onPress={clearBlock}>
+              <Text style={styles.ghostText}>Baadaye</Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </Modal>

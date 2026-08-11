@@ -28,6 +28,7 @@ export default function Radio() {
       audio_url: st.stream_url,
       thumbnail: st.thumbnail,
       artist_name: "LIVE · Redio",
+      isLive: true,
     });
   };
 

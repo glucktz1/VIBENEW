@@ -10,6 +10,7 @@ import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { AuthProvider } from "@/src/context/AuthContext";
 import { PlayerProvider } from "@/src/context/PlayerContext";
 import BlockModal from "@/src/components/BlockModal";
+import GlobalMiniPlayer from "@/src/components/GlobalMiniPlayer";
 import { COLORS } from "@/src/theme";
 
 // Disable logbox errors etc so that users can see the app
@@ -45,6 +46,7 @@ export default function RootLayout() {
               <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.background } }}>
                 <Stack.Screen name="player" options={{ presentation: "modal" }} />
               </Stack>
+              <GlobalMiniPlayer />
               <BlockModal />
             </View>
           </PlayerProvider>

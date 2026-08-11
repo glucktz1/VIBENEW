@@ -11,7 +11,7 @@ export default function MiniPlayer({ bottomOffset = 0 }: { bottomOffset?: number
   const router = useRouter();
   if (!current) return null;
 
-  const progress = duration > 0 ? Math.min(1, position / duration) : 0;
+  const progress = !current.isLive && duration > 0 && isFinite(duration) ? Math.min(1, position / duration) : 0;
 
   return (
     <Pressable

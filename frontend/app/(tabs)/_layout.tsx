@@ -4,7 +4,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "@/src/theme";
-import MiniPlayer from "@/src/components/MiniPlayer";
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
@@ -65,7 +64,6 @@ export default function TabsLayout() {
           }}
         />
       </Tabs>
-      <MiniPlayer bottomOffset={tabBarHeight + 6} />
     </View>
   );
 }

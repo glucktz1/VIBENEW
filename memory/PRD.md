@@ -23,8 +23,19 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - Recommendation engine: weighted scoring (same_album=100, genre=40, popularity=25, artist=20, recency=15) + diversity fallback (cap consecutive same-artist)
 - Subscription plans: Kwa Siku 500, Kwa Wiki 2000, Kwa Mwezi 5500 TZS (simulated Azam Pay)
 
-## What's Been Implemented — Session 1 (Aug 11, 2026)
-- ✅ JWT auth (register/login/me), admin seeding, empty-password admin login
+## What's Been Implemented — Session 2 (Aug 11, 2026) — Monetization Audit
+- ✅ Guest limits enforced (5 plays / 5 skips) on manual play AND auto-advance, independent of billing
+- ✅ Premium gating via `gatePremium()` for: like, add-to-playlist, create playlist, download
+- ✅ Tiered skips for logged-in non-premium (6 → +3 → +3 → disable + 15s preview mode)
+- ✅ Inline "Changia" payment banner on full player for non-premium (Gracefy-faithful)
+- ✅ Offline downloads (expo-file-system legacy) — native only; web shows "Pakua Programu" prompt
+- ✅ Downloads screen (/downloads) + Profile link; per-song download/remove on player
+- ✅ Lock-screen/background pause + subscribe prompt for non-premium (native, AppState)
+- ✅ Player duration bug fixed: live radio shows LIVE badge (no seek/huge timestamp); NaN/huge durations guarded
+- ✅ Global MiniPlayer now persists across ALL screens (root-mounted), hides on player/auth
+- ✅ Testing: 30/30 backend pass; all monetization + player flows verified
+
+## What's Been Implemented — Session 1 (Aug 11, 2026)- ✅ JWT auth (register/login/me), admin seeding, empty-password admin login
 - ✅ Music: home feed, albums + detail, songs, search, categories, play tracking
 - ✅ Player: mini player + full player (seek, next/prev, preview-mode banner), auto-queue via recommendations
 - ✅ Library: playlists CRUD, liked songs, add-to-playlist sheet

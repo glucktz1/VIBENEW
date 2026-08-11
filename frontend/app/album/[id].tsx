@@ -16,7 +16,7 @@ export default function AlbumDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { isGuest, user } = useAuth();
-  const { playTrack, current, isPlaying, togglePlay } = usePlayer();
+  const { playTrack, current, isPlaying, togglePlay, gatePremium } = usePlayer();
   const [album, setAlbum] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [likedIds, setLikedIds] = useState<string[]>([]);
@@ -51,7 +51,7 @@ export default function AlbumDetail() {
   };
 
   const toggleLike = async (songId: string) => {
-    if (isGuest) { router.push("/(auth)/login"); return; }
+    if (!gatePremium()) return;
     try {
       const res = await libraryApi.toggleLike(songId);
       setLikedIds((prev) => res.liked ? [...prev, songId] : prev.filter((i) => i !== songId));
@@ -98,7 +98,7 @@ export default function AlbumDetail() {
                 <Pressable testID={`album-like-${s.song_id}`} onPress={() => toggleLike(s.song_id)} hitSlop={8} style={styles.likeBtn}>
                   <Ionicons name={likedIds.includes(s.song_id) ? "heart" : "heart-outline"} size={20} color={likedIds.includes(s.song_id) ? COLORS.error : COLORS.textMuted} />
                 </Pressable>
-                <Pressable testID={`album-add-${s.song_id}`} onPress={() => { if (isGuest) { router.push("/(auth)/login"); } else { setSheetSong(s.song_id); } }} hitSlop={8} style={styles.likeBtn}>
+                <Pressable testID={`album-add-${s.song_id}`} onPress={() => { if (gatePremium()) { setSheetSong(s.song_id); } }} hitSlop={8} style={styles.likeBtn}>
                   <Ionicons name="add-circle-outline" size={20} color={COLORS.textMuted} />
                 </Pressable>
               </View>

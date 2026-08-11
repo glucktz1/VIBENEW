@@ -1,0 +1,39 @@
+{
+  "summary": "Vibe monetization/premium enforcement iteration — PASS end-to-end. Backend regression: 30/30 pytest cases green (health, home, catalog, auth incl. admin empty-password, playlists+like, playback, billing incl. GET /api/billing-status returning guest_play_limit=5, guest_skip_limit=5, skip_tiers=[6,3,3], preview_seconds=15, preview_pattern=[15,15,15,0], simulated Azam Pay activating is_premium=true, admin RBAC). Frontend (Expo web @ 390x844) verified: (1) GUEST — playing home trending songs works, MiniPlayer (mini-player) with mini-play-toggle+mini-next appears above tab bar; tapping mini opens full Player showing correct duration 5:44 (NOT 8450:36); tapping player-like or player-download as guest opens BlockModal (block-modal) — like shows GUEST content 'Endelea Kusikiliza' with primary label 'Ingia'; download on WEB shows DOWNLOAD-APP content 'Pakua Programu ya Vibe' with primary 'Sawa'. Skipping via mini-next past the 5-skip limit triggers block-modal with 'Ingia' primary as expected. (2) RADIO — opening a station from Redio screen (via in-app router nav) then returning to home shows mini-player with 'LIVE · Redio'; full player renders red 'LIVE' badge, NO seek bar, NO giant duration numbers → duration bug fixed. (3) NON-PREMIUM logged-in — after registering free_<ts>@t.com and playing a song, the inline 'changia-banner' is visible on full Player; tapping player-like opens block-modal with 'Nenda Premium' body + 'Changia Sasa' primary; tapping player-download (web) opens the download-app modal; Library create playlist (library-create) opens block-modal with 'Changia Sasa'. (4) CHECKOUT — /plans lists plan-plan_daily/weekly/monthly, selecting one, entering phone 0712345678 and tapping checkout-pay activates premium (plans-active card 'Wewe ni mwanachama Premium' shown). (5) POST-PREMIUM — changia-banner is gone on player and player-like works with NO block-modal. (6) Downloads screen (/downloads) on web renders empty state 'Pakua kwenye programu ya simu / Nyimbo za nje ya mtandao zinapatikana kwenye programu ya Vibe ya Android/iOS.' correctly. All required testIDs (block-modal, block-primary, block-dismiss, changia-banner, player-like, player-download, mini-player, mini-play-toggle, mini-next, library-create, plan-*, checkout-phone, checkout-pay) are present and functional. No red-screen errors. Only recurring warning: 'props.pointerEvents is deprecated. Use style.pointerEvents' (already noted in iter1, cosmetic).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Radio (/radio)", "issues": ["MiniPlayer is only mounted inside /(tabs)/_layout.tsx, so on the Redio screen (and other non-tab routes like /plans, /downloads, /admin, /churches, /neno) the mini player is not visible while a station is playing. Users have to back out to a tab screen to see/open the full player. Consider mounting MiniPlayer at root layout so it persists on every screen (Gracefy/Spotify parity)."]}
+    ],
+    "react_native_issues": [
+      {"component": "props.pointerEvents", "issue": "React-Native-Web deprecation warning still emitted on load: 'props.pointerEvents is deprecated. Use style.pointerEvents'. Non-blocking; migrate remaining usages to style={{ pointerEvents: ... }}. Same as iteration_1."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_vibe_backend.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/iteration_2.json"
+  ],
+  "action_items": [
+    "(Nice-to-have) Move <MiniPlayer /> from /(tabs)/_layout.tsx up to app/_layout.tsx (with safe-area bottom offset) so it persists on Radio/Plans/Downloads/Admin/Neno/Churches routes — currently users cannot reopen the full player from those screens.",
+    "(Cosmetic) Silence the `props.pointerEvents` deprecation warning by migrating to `style={{ pointerEvents: ... }}`."
+  ],
+  "critical_code_review_comments": [
+    "player.tsx L46-49: LIVE detection correctly guards against unknown/broken durations (`!isFinite(rawDur) || rawDur > 86400 || rawDur <= 0`) — this is exactly what fixes the previously reported 8450:36 bug for radio streams and is verified in the UI.",
+    "PlayerContext.tsx: guest counters use ref+AsyncStorage, and both guest_play_limit and guest_skip_limit branches call setBlockReason('guest'); gatePremium sets 'subscribe' when billing.billing_enabled and !isPremium. Coverage is correct and matches BlockModal content mapping.",
+    "downloads.ts + player.tsx onDownload: on web, promptDownloadApp() is always invoked regardless of premium status, which matches the spec ('downloads are native-only'). Verified live: both guest and non-premium web users get the 'Pakua Programu ya Vibe' modal.",
+    "billing.py: POST /api/payment/azampay/initiate marks is_premium=true and writes a transaction; confirmed in-app that after checkout /me returns is_premium and the banner + gating disappear."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_2.json (created)",
+    "/app/test_reports/pytest/pytest_results.xml (regenerated)"
+  ],
+  "success_rate": {"backend": "100% (30/30)", "frontend": "100% of monetization flows tested (guest play/skip limit, guest like/download gating, non-premium like/download/create-playlist gating, changia-banner visibility, plans checkout activating premium, post-premium gating removed, downloads web empty state, radio LIVE indicator + duration bug fix)"},
+  "seed_data_creation": "Registered a fresh non-premium user free_<timestamp>@t.com / pass123 to exercise the subscribe-gated flows; used simulated Azam Pay to activate premium (test-only, does not affect production).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend base: EXPO_PUBLIC_BACKEND_URL (currently https://logic-6.preview.emergentagent.com). Admin: admin@vibe.app / Vibe@2026 (or empty). Run backend tests: `cd /app/backend && pytest tests/test_vibe_backend.py -v`. For monetization UI flows use mobile viewport 390x844 and clear localStorage between guest tests to reset guest_play/skip counters (they live under keys vibe_guest_plays / vibe_guest_skips). Non-tab screens (radio/plans/downloads/admin/churches/neno) do NOT show the mini player — this is a known design gap flagged in action_items; open the full player from a tab screen or /player route.",
+  "rca_of_issue": "No blocking bugs in this iteration. Two prior concerns from the request were confirmed fixed: (a) the '8450:36 for live radio' duration bug — player.tsx now treats duration > 86400s, non-finite, or <=0 as isLive and hides the seek bar/time labels in favor of a red 'LIVE' badge; verified live for Vibe Worship FM. (b) All monetization gates route through BlockModal with the correct reason ('guest' → 'Ingia', 'subscribe' → 'Changia Sasa', 'download-app' → 'Sawa' + 'Pakua Programu ya Vibe'). One non-blocking UX gap: MiniPlayer is scoped to the tabs layout, so while playback continues on non-tab routes, users cannot re-open the full player from there without navigating back to a tab first."
+}

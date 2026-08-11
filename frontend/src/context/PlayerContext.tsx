@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
+import { AppState, Platform } from "react-native";
 import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from "expo-audio";
 import { storage } from "@/src/utils/storage";
 import { musicApi, billingApi } from "@/src/services/api";
@@ -13,9 +14,10 @@ export type Track = {
   album_title?: string;
   album_id?: string;
   duration?: number;
+  isLive?: boolean;
 };
 
-type BlockReason = "guest" | "subscribe" | null;
+type BlockReason = "guest" | "subscribe" | "download-app" | null;
 
 type PlayerCtx = {
   current: Track | null;
@@ -27,6 +29,8 @@ type PlayerCtx = {
   previewMode: boolean;
   blockReason: BlockReason;
   clearBlock: () => void;
+  promptDownloadApp: () => void;
+  gatePremium: () => boolean;
   playTrack: (track: Track, queue?: Track[]) => Promise<void>;
   togglePlay: () => void;
   next: () => Promise<void>;
@@ -64,6 +68,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const playerRef = useRef<AudioPlayer | null>(null);
   const queueRef = useRef<Track[]>([]);
+  const currentRef = useRef<Track | null>(null);
   const indexRef = useRef(0);
   const previewRef = useRef(false);
   const previewCountRef = useRef(0);
@@ -105,6 +110,39 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return !isPremiumRef.current;
   }, []);
 
+  // Gate a premium-only feature (like, download, playlist). Returns true if allowed.
+  const gatePremium = useCallback(() => {
+    if (isGuestRef.current) {
+      setBlockReason("guest");
+      return false;
+    }
+    if (!isPremiumRef.current && billing.billing_enabled) {
+      setBlockReason("subscribe");
+      return false;
+    }
+    return true;
+  }, [billing]);
+
+  const promptDownloadApp = useCallback(() => setBlockReason("download-app"), []);
+
+  // Lock-screen / background enforcement for non-premium users (native only).
+  // When the app is backgrounded (screen lock, home), pause playback and prompt.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") return;
+      const p = playerRef.current;
+      const live = currentRef.current?.isLive;
+      if (p && !isPremiumRef.current && billing.billing_enabled && Platform.OS !== "web" && !live) {
+        try {
+          p.pause();
+        } catch {}
+        setIsPlaying(false);
+        setBlockReason("subscribe");
+      }
+    });
+    return () => sub.remove();
+  }, [billing]);
+
   const attachListener = useCallback((player: AudioPlayer) => {
     player.addListener("playbackStatusUpdate", (status: any) => {
       if (!status) return;
@@ -113,8 +151,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       if (typeof status.duration === "number" && status.duration > 0) setDuration(status.duration);
       if (typeof status.playing === "boolean") setIsPlaying(status.playing);
 
-      // Preview mode cutoff (non-premium, skips exhausted)
-      if (previewRef.current && typeof status.currentTime === "number") {
+      // Preview mode cutoff (non-premium, skips exhausted) — never for live radio
+      if (previewRef.current && !currentRef.current?.isLive && typeof status.currentTime === "number") {
         const cut = PREVIEW_PATTERN[previewCountRef.current % PREVIEW_PATTERN.length];
         if (cut > 0 && status.currentTime >= cut) {
           void handleNext(true);
@@ -140,6 +178,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       playerRef.current = player;
       attachListener(player);
       setCurrent(track);
+      currentRef.current = track;
       setPosition(0);
       setDuration(track.duration || 0);
       player.play();
@@ -191,6 +230,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
 
       const q = queueRef.current;
+      // Guest play limit also applies when auto-advancing to the next song
+      if (auto && isGuestRef.current) {
+        guestPlaysRef.current += 1;
+        await storage.setItem(GUEST_PLAY_KEY, guestPlaysRef.current);
+        if (guestPlaysRef.current > (billing.guest_play_limit || 5)) {
+          setBlockReason("guest");
+          setIsPlaying(false);
+          return;
+        }
+      }
       let nextIdx = indexRef.current + 1;
       if (nextIdx < q.length) {
         indexRef.current = nextIdx;
@@ -305,6 +354,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         previewMode,
         blockReason,
         clearBlock: () => setBlockReason(null),
+        promptDownloadApp,
+        gatePremium,
         playTrack,
         togglePlay,
         next,

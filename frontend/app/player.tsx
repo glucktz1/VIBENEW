@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, GestureResponderEvent } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, GestureResponderEvent, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -8,10 +8,11 @@ import { useRouter } from "expo-router";
 import { usePlayer } from "@/src/context/PlayerContext";
 import { useAuth } from "@/src/context/AuthContext";
 import { libraryApi } from "@/src/services/api";
+import { isDownloaded, downloadTrack, removeDownload, isWeb } from "@/src/services/downloads";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 
 function fmt(sec: number) {
-  if (!sec || sec < 0) return "0:00";
+  if (!sec || sec < 0 || !isFinite(sec)) return "0:00";
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
@@ -19,10 +20,17 @@ function fmt(sec: number) {
 
 export default function Player() {
   const router = useRouter();
-  const { current, isPlaying, isBuffering, position, duration, togglePlay, next, prev, seek, previewMode } = usePlayer();
-  const { isGuest } = useAuth();
+  const { current, isPlaying, isBuffering, position, duration, togglePlay, next, prev, seek, previewMode, gatePremium, promptDownloadApp } = usePlayer();
+  const { isGuest, isPremium } = useAuth();
   const [barWidth, setBarWidth] = useState(1);
   const [liked, setLiked] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
+  useEffect(() => {
+    if (current && !isWeb) isDownloaded(current.song_id).then(setDownloaded);
+    else setDownloaded(false);
+  }, [current?.song_id]);
 
   if (!current) {
     return (
@@ -35,22 +43,40 @@ export default function Player() {
     );
   }
 
-  const dur = duration || current.duration || 0;
+  // Live radio (or unknown/broken duration) => no seek bar, show LIVE.
+  const rawDur = duration || current.duration || 0;
+  const isLive = !!current.isLive || !isFinite(rawDur) || rawDur > 86400 || rawDur <= 0;
+  const dur = isLive ? 0 : rawDur;
   const progress = dur > 0 ? Math.min(1, position / dur) : 0;
 
   const onSeek = (e: GestureResponderEvent) => {
+    if (isLive) return;
     const x = e.nativeEvent.locationX;
     const ratio = Math.max(0, Math.min(1, x / barWidth));
     seek(ratio * dur);
   };
 
   const toggleLike = async () => {
-    if (isGuest) { router.push("/(auth)/login"); return; }
+    if (!gatePremium()) return;
     try {
       const res = await libraryApi.toggleLike(current.song_id);
       setLiked(res.liked);
     } catch {}
   };
+
+  const onDownload = async () => {
+    if (isWeb) { promptDownloadApp(); return; }
+    if (downloaded) { await removeDownload(current.song_id); setDownloaded(false); return; }
+    if (!gatePremium()) return;
+    setDownloading(true);
+    try {
+      await downloadTrack(current);
+      setDownloaded(true);
+    } catch {}
+    setDownloading(false);
+  };
+
+  const showChangiaBanner = !isGuest && !isPremium;
 
   return (
     <View style={styles.root}>
@@ -78,30 +104,57 @@ export default function Player() {
         <View style={styles.meta}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title} numberOfLines={1}>{current.title}</Text>
-            <Text style={styles.artist} numberOfLines={1}>{current.artist_name || current.album_title || "Vibe"}</Text>
+            <Text style={styles.artist} numberOfLines={1}>{isLive ? "LIVE · Redio" : current.artist_name || current.album_title || "Vibe"}</Text>
           </View>
-          <Pressable testID="player-like" onPress={toggleLike} hitSlop={10}>
-            <Ionicons name={liked ? "heart" : "heart-outline"} size={28} color={liked ? COLORS.error : COLORS.text} />
+          <Pressable testID="player-like" onPress={toggleLike} hitSlop={10} style={styles.metaBtn}>
+            <Ionicons name={liked ? "heart" : "heart-outline"} size={26} color={liked ? COLORS.error : COLORS.text} />
           </Pressable>
+          {!isLive ? (
+            <Pressable testID="player-download" onPress={onDownload} hitSlop={10} style={styles.metaBtn}>
+              {downloading ? (
+                <ActivityIndicator color={COLORS.text} size="small" />
+              ) : (
+                <Ionicons name={downloaded ? "checkmark-circle" : "download-outline"} size={26} color={downloaded ? COLORS.success : COLORS.text} />
+              )}
+            </Pressable>
+          ) : null}
         </View>
+
+        {/* Non-premium payment prompt banner (faithful to Gracefy) */}
+        {showChangiaBanner ? (
+          <Pressable testID="changia-banner" style={styles.changiaBanner} onPress={() => router.push("/plans")}>
+            <Ionicons name="star" size={16} color="#fff" />
+            <Text style={styles.changiaText} numberOfLines={1}>Changia kidogo kusikiliza kwa uhuru</Text>
+            <View style={styles.changiaBtn}><Text style={styles.changiaBtnText}>Changia</Text></View>
+          </Pressable>
+        ) : null}
 
         {/* Progress */}
         <View style={styles.progressWrap}>
-          <Pressable
-            testID="player-seek"
-            style={styles.barTouch}
-            onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
-            onPress={onSeek}
-          >
-            <View style={styles.barTrack}>
-              <View style={[styles.barFill, { width: `${progress * 100}%` }]} />
-              <View style={[styles.knob, { left: `${progress * 100}%` }]} />
+          {isLive ? (
+            <View style={styles.liveWrap}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveLabel}>LIVE</Text>
             </View>
-          </Pressable>
-          <View style={styles.times}>
-            <Text style={styles.time}>{fmt(position)}</Text>
-            <Text style={styles.time}>{fmt(dur)}</Text>
-          </View>
+          ) : (
+            <>
+              <Pressable
+                testID="player-seek"
+                style={styles.barTouch}
+                onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
+                onPress={onSeek}
+              >
+                <View style={styles.barTrack}>
+                  <View style={[styles.barFill, { width: `${progress * 100}%` }]} />
+                  <View style={[styles.knob, { left: `${progress * 100}%` }]} />
+                </View>
+              </Pressable>
+              <View style={styles.times}>
+                <Text style={styles.time}>{fmt(position)}</Text>
+                <Text style={styles.time}>{fmt(dur)}</Text>
+              </View>
+            </>
+          )}
         </View>
 
         {/* Controls */}
@@ -135,8 +188,16 @@ const styles = StyleSheet.create({
   previewBanner: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: COLORS.warning, marginHorizontal: SPACING.lg, marginTop: SPACING.lg, borderRadius: RADIUS.md, padding: SPACING.sm },
   previewText: { color: "#000", fontSize: FONT.sm, fontWeight: "700", marginLeft: SPACING.xs },
   meta: { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACING.lg, marginTop: SPACING.xl },
+  metaBtn: { paddingHorizontal: SPACING.sm },
   title: { color: COLORS.text, fontSize: FONT.xxl, fontWeight: "800" },
   artist: { color: COLORS.textSecondary, fontSize: FONT.lg, marginTop: 4 },
+  changiaBanner: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.primary, marginHorizontal: SPACING.lg, marginTop: SPACING.md, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, height: 46 },
+  changiaText: { flex: 1, color: "#fff", fontSize: FONT.sm, fontWeight: "700", marginLeft: SPACING.sm },
+  changiaBtn: { backgroundColor: "rgba(255,255,255,0.25)", borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: 6 },
+  changiaBtnText: { color: "#fff", fontWeight: "800", fontSize: FONT.sm },
+  liveWrap: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: SPACING.md },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.error, marginRight: 6 },
+  liveLabel: { color: COLORS.error, fontWeight: "800", fontSize: FONT.md, letterSpacing: 1 },
   progressWrap: { paddingHorizontal: SPACING.lg, marginTop: SPACING.lg },
   barTouch: { paddingVertical: SPACING.sm },
   barTrack: { height: 5, borderRadius: 3, backgroundColor: COLORS.progressBar },

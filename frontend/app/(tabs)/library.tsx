@@ -12,7 +12,7 @@ import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 export default function Library() {
   const router = useRouter();
   const { isGuest } = useAuth();
-  const { playTrack } = usePlayer();
+  const { playTrack, gatePremium } = usePlayer();
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [liked, setLiked] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,7 +67,7 @@ export default function Library() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.h1}>Maktaba</Text>
-        <Pressable testID="library-create" onPress={() => setShowCreate(true)} hitSlop={10}>
+        <Pressable testID="library-create" onPress={() => { if (gatePremium()) setShowCreate(true); }} hitSlop={10}>
           <Ionicons name="add" size={28} color={COLORS.text} />
         </Pressable>
       </View>
