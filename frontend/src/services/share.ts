@@ -1,6 +1,6 @@
 import { Share, Platform } from "react-native";
 
-const APP_BASE = "https://vibe.app";
+const APP_BASE = (process.env.EXPO_PUBLIC_APP_BASE as string) || "https://vibe.app";
 
 export type ShareTarget = {
   type: "song" | "album" | "playlist";

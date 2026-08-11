@@ -11,8 +11,8 @@ import uuid
 import bcrypt
 from db import db, now_utc
 
-ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@vibe.app")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Vibe@2026")
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
 
 AUDIO = [f"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-{i}.mp3" for i in range(1, 17)]
 
@@ -79,7 +79,7 @@ SONG_NAMES = [
 
 async def seed():
     # ---- admin ----
-    if not await db.users.find_one({"email": ADMIN_EMAIL.lower()}):
+    if ADMIN_EMAIL and ADMIN_PASSWORD and not await db.users.find_one({"email": ADMIN_EMAIL.lower()}):
         await db.users.insert_one({
             "email": ADMIN_EMAIL.lower(),
             "name": "Vibe Admin",
