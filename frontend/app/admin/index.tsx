@@ -9,7 +9,7 @@ import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { isAdmin, loading: authLoading } = useAuth();
+  const { isAdmin, isGuest, loading: authLoading } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [albums, setAlbums] = useState<any[]>([]);
@@ -60,8 +60,16 @@ export default function AdminDashboard() {
       <SafeAreaView style={styles.center} edges={["top"]}>
         <Ionicons name="lock-closed" size={48} color={COLORS.textMuted} />
         <Text style={styles.denied}>Huna ruhusa ya admin</Text>
-        <Pressable style={styles.primary} onPress={() => router.replace("/(tabs)")}>
-          <Text style={styles.primaryText}>Rudi Nyumbani</Text>
+        {isGuest ? (
+          <>
+            <Text style={styles.deniedSub}>Ingia na akaunti ya admin ili kuendelea.</Text>
+            <Pressable testID="admin-login" style={styles.primary} onPress={() => router.push("/(auth)/login")}>
+              <Text style={styles.primaryText}>Ingia kama Admin</Text>
+            </Pressable>
+          </>
+        ) : null}
+        <Pressable style={styles.ghostBtn} onPress={() => router.replace("/(tabs)")}>
+          <Text style={styles.ghostBtnText}>Rudi Nyumbani</Text>
         </Pressable>
       </SafeAreaView>
     );
@@ -232,6 +240,9 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.background },
   center: { flex: 1, backgroundColor: COLORS.background, alignItems: "center", justifyContent: "center", padding: SPACING.lg },
   denied: { color: COLORS.text, fontSize: FONT.lg, fontWeight: "700", marginTop: SPACING.md },
+  deniedSub: { color: COLORS.textSecondary, fontSize: FONT.md, textAlign: "center", marginTop: SPACING.sm, paddingHorizontal: SPACING.lg },
+  ghostBtn: { paddingVertical: SPACING.md, marginTop: SPACING.sm },
+  ghostBtnText: { color: COLORS.textMuted, fontSize: FONT.md, fontWeight: "600" },
   primary: { backgroundColor: COLORS.primary, borderRadius: RADIUS.full, paddingHorizontal: SPACING.xl, height: 48, alignItems: "center", justifyContent: "center", marginTop: SPACING.lg },
   primaryText: { color: "#fff", fontWeight: "800" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: SPACING.md },
