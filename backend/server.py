@@ -9,6 +9,7 @@ from db import client, db
 from seed import seed
 from routers import (
     auth, music, playlists, home, radio, bible, neno, churches, billing, admin,
+    analytics,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -38,7 +39,7 @@ async def health():
     return {"status": "healthy"}
 
 
-for r in (auth, music, playlists, home, radio, bible, neno, churches, billing, admin):
+for r in (auth, music, playlists, home, radio, bible, neno, churches, billing, admin, analytics):
     app.include_router(r.router)
 
 app.add_middleware(

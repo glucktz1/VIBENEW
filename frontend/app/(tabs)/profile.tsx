@@ -1,15 +1,34 @@
-import React from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
+import React, { useState } from "react";
+import { View, Text, StyleSheet, Pressable, ScrollView, Modal, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/src/context/AuthContext";
+import { authApi } from "@/src/services/api";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 
 export default function Profile() {
   const router = useRouter();
   const { user, isGuest, isAdmin, isPremium, logout } = useAuth();
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteErr, setDeleteErr] = useState("");
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setDeleteErr("");
+    try {
+      await authApi.deleteAccount();
+      await logout();
+      setShowDelete(false);
+      router.replace("/(tabs)");
+    } catch (e: any) {
+      setDeleteErr(e.message || "Imeshindikana kufuta akaunti");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const rows = [
     { key: "plans", label: "Kifurushi & Malipo", icon: "star", route: "/plans" },
@@ -77,9 +96,37 @@ export default function Profile() {
             </Pressable>
           ) : null}
 
+          {!isGuest && !isAdmin ? (
+            <Pressable testID="profile-delete-account" style={styles.deleteBtn} onPress={() => { setDeleteErr(""); setShowDelete(true); }}>
+              <Ionicons name="trash-outline" size={18} color={COLORS.error} />
+              <Text style={styles.deleteText}>Futa Akaunti</Text>
+            </Pressable>
+          ) : null}
+
           <Text style={styles.version}>Vibe v1.0.0</Text>
         </View>
       </ScrollView>
+
+      <Modal transparent visible={showDelete} animationType="fade" onRequestClose={() => setShowDelete(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard} testID="delete-account-modal">
+            <View style={styles.modalIcon}>
+              <Ionicons name="warning" size={28} color={COLORS.error} />
+            </View>
+            <Text style={styles.modalTitle}>Futa Akaunti?</Text>
+            <Text style={styles.modalBody}>
+              Kitendo hiki hakiwezi kutenduliwa. Akaunti yako, playlist zako na taarifa zote zitafutwa kabisa.
+            </Text>
+            {deleteErr ? <Text style={styles.modalErr}>{deleteErr}</Text> : null}
+            <Pressable testID="delete-account-confirm" style={styles.modalDelete} onPress={handleDelete} disabled={deleting}>
+              {deleting ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalDeleteText}>Ndiyo, Futa Akaunti</Text>}
+            </Pressable>
+            <Pressable testID="delete-account-cancel" style={styles.modalCancel} onPress={() => setShowDelete(false)} disabled={deleting}>
+              <Text style={styles.modalCancelText}>Ghairi</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -103,5 +150,17 @@ const styles = StyleSheet.create({
   rowLabel: { flex: 1, color: COLORS.text, fontSize: FONT.md, fontWeight: "600", marginLeft: SPACING.md },
   logout: { flexDirection: "row", alignItems: "center", justifyContent: "center", padding: SPACING.md, marginTop: SPACING.md },
   logoutText: { color: COLORS.error, fontSize: FONT.md, fontWeight: "700", marginLeft: SPACING.sm },
+  deleteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", padding: SPACING.sm },
+  deleteText: { color: COLORS.error, fontSize: FONT.sm, fontWeight: "600", marginLeft: 6, textDecorationLine: "underline" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", alignItems: "center", justifyContent: "center", padding: SPACING.lg },
+  modalCard: { width: "100%", maxWidth: 360, backgroundColor: COLORS.card, borderRadius: RADIUS.lg, padding: SPACING.lg, borderWidth: 1, borderColor: COLORS.border, alignItems: "center" },
+  modalIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: "rgba(255,71,87,0.15)", alignItems: "center", justifyContent: "center", marginBottom: SPACING.md },
+  modalTitle: { color: COLORS.text, fontSize: FONT.xl, fontWeight: "800", marginBottom: SPACING.sm },
+  modalBody: { color: COLORS.textSecondary, fontSize: FONT.md, textAlign: "center", lineHeight: 20, marginBottom: SPACING.md },
+  modalErr: { color: COLORS.error, fontSize: FONT.sm, textAlign: "center", marginBottom: SPACING.sm },
+  modalDelete: { backgroundColor: COLORS.error, borderRadius: RADIUS.full, height: 50, width: "100%", alignItems: "center", justifyContent: "center" },
+  modalDeleteText: { color: "#fff", fontSize: FONT.md, fontWeight: "800" },
+  modalCancel: { paddingVertical: SPACING.md, marginTop: SPACING.xs },
+  modalCancelText: { color: COLORS.textMuted, fontSize: FONT.md, fontWeight: "600" },
   version: { color: COLORS.textMuted, textAlign: "center", marginTop: SPACING.lg, fontSize: FONT.sm },
 });

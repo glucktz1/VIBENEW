@@ -101,3 +101,14 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+## Session 8 (Aug 14, 2026) — Gracefy Dashboard Port + Delete Account
+### Backend
+- NEW router /app/backend/routers/analytics.py — 6 endpoints (admin-only):
+  - GET /api/analytics/overview, /trends, /user-demographics, /realtime, /download-stats, /live-listeners
+  - Response shapes mirror Gracefy web Dashboard.jsx consumption
+- NEW DELETE /api/auth/me — deletes current user + their playlists/transactions/play_events (store compliance). Admin self-delete blocked (403).
+- Admin creds: admin@vibe.app / Vibe@2026 (empty password also works for admin)
+### Frontend
+- Rewrote /app/frontend/app/admin/index.tsx — faithful RN port of Gracefy Dashboard (zinc/violet theme): live banner, downloads banner, 4 primary stat cards, 4 secondary stats, 4 charts (Customer Growth area, Donations area, Content bar, Category pie) + demographics (device/gender/age/location). Uses react-native-gifted-charts. English labels. Content & Users tabs preserved.
+- Fixed drawer testID spacing (kebab-case).
+- profile.tsx — added "Futa Akaunti" (Delete Account) button + confirmation modal (testIDs: profile-delete-account, delete-account-modal, delete-account-confirm, delete-account-cancel).

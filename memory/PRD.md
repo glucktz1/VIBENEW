@@ -23,6 +23,13 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - Recommendation engine: weighted scoring (same_album=100, genre=40, popularity=25, artist=20, recency=15) + diversity fallback (cap consecutive same-artist)
 - Subscription plans: Kwa Siku 500, Kwa Wiki 2000, Kwa Mwezi 5500 TZS (simulated Azam Pay)
 
+## What's Been Implemented — Session 8 (Aug 14, 2026) — Gracefy Dashboard 1:1 Port + Delete Account
+- ✅ Ported the original Gracefy web Dashboard (Dashboard.jsx) faithfully into React Native (zinc/violet dark theme) — live streaming banner, downloads banner, 4 primary stat cards, 4 secondary stats, 4 charts (Customer Growth area, Donations Trend area, Content Performance bar, Category pie) + User Demographics (device/gender/age/location) using react-native-gifted-charts. English labels (rest of app stays Swahili).
+- ✅ NEW backend router routers/analytics.py — 6 admin-only endpoints matching Dashboard.jsx: /api/analytics/{overview,trends,user-demographics,realtime,download-stats,live-listeners}
+- ✅ Fixed admin drawer testID spacing (kebab-case)
+- ✅ NEW DELETE /api/auth/me + "Futa Akaunti" button & confirm modal on Profile (store-compliance). Admin self-delete blocked (403).
+- ✅ Testing: 21/21 backend pytest pass; full admin dashboard + delete-account flows verified (iteration_12)
+
 ## What's Been Implemented — Session 7 (Aug 14, 2026) — Admin Dashboard Redesign
 - ✅ Dark side-drawer menu (hamburger) with grouped sections: Reports & Analytics, Contents, Control & Management, System
 - ✅ Drawer items navigate to Overview/Content/Users; unbuilt sections show "Inakuja hivi karibuni" toast

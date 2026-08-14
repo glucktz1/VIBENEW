@@ -67,3 +67,20 @@ async def login(body: LoginIn):
 @router.get("/me")
 async def me(user: dict = Depends(get_current_user)):
     return public_user(user)
+
+
+@router.delete("/me")
+async def delete_account(user: dict = Depends(get_current_user)):
+    """Permanently delete the current user's account and associated data.
+
+    Required for Apple/Google store compliance (account deletion for apps with login).
+    """
+    uid = str(user["_id"])
+    if user.get("role") in ("admin", "moderator", "content_manager"):
+        raise HTTPException(status_code=403, detail="Admin accounts cannot be self-deleted")
+    await db.playlists.delete_many({"user_id": uid})
+    await db.transactions.delete_many({"user_id": uid})
+    await db.play_events.delete_many({"user_id": uid})
+    await db.users.delete_one({"_id": user["_id"]})
+    return {"ok": True}
+

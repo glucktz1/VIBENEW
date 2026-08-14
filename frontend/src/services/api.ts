@@ -41,6 +41,7 @@ export const authApi = {
   register: (email: string, password: string, name: string) =>
     api.post<any>("/auth/register", { email, password, name }),
   me: () => api.get<any>("/auth/me"),
+  deleteAccount: () => api.del<any>("/auth/me"),
 };
 
 export const musicApi = {
@@ -87,4 +88,11 @@ export const adminApi = {
   createSong: (b: any) => api.post<any>("/admin/songs", b),
   deleteSong: (id: string) => api.del(`/admin/songs/${id}`),
   playsAnalytics: () => api.get<any>("/admin/analytics/plays"),
+  // Gracefy dashboard analytics
+  overview: () => api.get<any>("/analytics/overview"),
+  trends: () => api.get<any>("/analytics/trends"),
+  demographics: () => api.get<any>("/analytics/user-demographics"),
+  realtime: () => api.get<any>("/analytics/realtime"),
+  downloadStats: () => api.get<any>("/analytics/download-stats"),
+  liveListeners: () => api.get<any>("/analytics/live-listeners"),
 };

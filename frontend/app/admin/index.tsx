@@ -1,11 +1,36 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, TextInput, Modal, KeyboardAvoidingView, Platform } from "react-native";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import {
+  View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator,
+  TextInput, Modal, KeyboardAvoidingView, Platform, Dimensions,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { LineChart, BarChart, PieChart } from "react-native-gifted-charts";
 import { adminApi, musicApi } from "@/src/services/api";
 import { useAuth } from "@/src/context/AuthContext";
-import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
+
+// Gracefy admin palette (zinc / violet) — faithful to the original web dashboard
+const C = {
+  bg: "#09090b",
+  card: "#18181b",
+  cardAlt: "rgba(24,24,27,0.6)",
+  border: "#27272a",
+  text: "#ffffff",
+  sub: "#a1a1aa",
+  muted: "#71717a",
+  violet: "#8b5cf6",
+  emerald: "#10b981",
+  amber: "#f59e0b",
+  blue: "#3b82f6",
+  pink: "#ec4899",
+  red: "#ef4444",
+};
+const PIE_COLORS = ["#8b5cf6", "#10b981", "#f59e0b", "#3b82f6", "#ef4444", "#ec4899"];
+const GENDER_COLORS = ["#3b82f6", "#ec4899", "#8b5cf6", "#6b7280"];
+const SP = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 };
+const CHART_W = Dimensions.get("window").width - 2 * SP.md - 2 * SP.md;
 
 const MENU = [
   { group: "Reports & Analytics", items: [
@@ -38,13 +63,21 @@ const MENU = [
 export default function AdminDashboard() {
   const router = useRouter();
   const { isAdmin, isGuest, loading: authLoading } = useAuth();
-  const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [albums, setAlbums] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"overview" | "content" | "users">("overview");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [toast, setToast] = useState("");
+
+  // dashboard analytics
+  const [overview, setOverview] = useState<any>(null);
+  const [trends, setTrends] = useState<any>(null);
+  const [demographics, setDemographics] = useState<any>(null);
+  const [realtime, setRealtime] = useState<any>(null);
+  const [downloadStats, setDownloadStats] = useState<any>(null);
+  const [liveListeners, setLiveListeners] = useState<any>(null);
+  const pollRef = useRef<any>(null);
 
   // add forms
   const [showAlbum, setShowAlbum] = useState(false);
@@ -54,13 +87,37 @@ export default function AdminDashboard() {
 
   const load = useCallback(async () => {
     try {
-      const [s, u, a] = await Promise.all([adminApi.stats(), adminApi.users(), musicApi.albums()]);
-      setStats(s); setUsers(u); setAlbums(a);
+      const [u, a, ov, tr, dm, rt, dl, ll] = await Promise.all([
+        adminApi.users().catch(() => []),
+        musicApi.albums().catch(() => []),
+        adminApi.overview().catch(() => null),
+        adminApi.trends().catch(() => null),
+        adminApi.demographics().catch(() => null),
+        adminApi.realtime().catch(() => null),
+        adminApi.downloadStats().catch(() => null),
+        adminApi.liveListeners().catch(() => null),
+      ]);
+      setUsers(u); setAlbums(a);
+      setOverview(ov); setTrends(tr); setDemographics(dm);
+      setRealtime(rt); setDownloadStats(dl); setLiveListeners(ll);
     } catch {}
     setLoading(false);
   }, []);
 
-  useEffect(() => { if (isAdmin) load(); }, [isAdmin, load]);
+  useEffect(() => {
+    if (!isAdmin) return;
+    load();
+    // refresh realtime + live listeners every 15s (faithful to original)
+    pollRef.current = setInterval(async () => {
+      const [rt, ll] = await Promise.all([
+        adminApi.realtime().catch(() => null),
+        adminApi.liveListeners().catch(() => null),
+      ]);
+      if (rt) setRealtime(rt);
+      if (ll) setLiveListeners(ll);
+    }, 15000);
+    return () => clearInterval(pollRef.current);
+  }, [isAdmin, load]);
 
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(""), 2200); };
 
@@ -82,12 +139,12 @@ export default function AdminDashboard() {
     } catch (e: any) { flash(e.message); }
   };
 
-  if (authLoading) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
+  if (authLoading) return <View style={styles.center}><ActivityIndicator color={C.violet} size="large" /></View>;
 
   if (!isAdmin) {
     return (
       <SafeAreaView style={styles.center} edges={["top"]}>
-        <Ionicons name="lock-closed" size={48} color={COLORS.textMuted} />
+        <Ionicons name="lock-closed" size={48} color={C.muted} />
         <Text style={styles.denied}>Huna ruhusa ya admin</Text>
         {isGuest ? (
           <>
@@ -108,11 +165,11 @@ export default function AdminDashboard() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
         <Pressable testID="admin-menu" onPress={() => setDrawerOpen(true)} hitSlop={10}>
-          <Ionicons name="menu" size={26} color={COLORS.text} />
+          <Ionicons name="menu" size={26} color={C.text} />
         </Pressable>
         <Text style={styles.h1}>Admin Dashboard</Text>
         <Pressable testID="admin-back" onPress={() => router.replace("/(tabs)")} hitSlop={10}>
-          <Ionicons name="home" size={22} color={COLORS.textSecondary} />
+          <Ionicons name="home" size={22} color={C.sub} />
         </Pressable>
       </View>
 
@@ -120,100 +177,21 @@ export default function AdminDashboard() {
         {(["overview", "content", "users"] as const).map((t) => (
           <Pressable key={t} testID={`admin-tab-${t}`} style={[styles.segBtn, tab === t && styles.segActive]} onPress={() => setTab(t)}>
             <Text style={[styles.segText, tab === t && styles.segTextActive]}>
-              {t === "overview" ? "Muhtasari" : t === "content" ? "Maudhui" : "Watumiaji"}
+              {t === "overview" ? "Dashboard" : t === "content" ? "Content" : "Users"}
             </Text>
           </Pressable>
         ))}
       </View>
 
       {loading ? (
-        <ActivityIndicator color={COLORS.primary} style={{ marginTop: SPACING.xl }} />
+        <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} />
       ) : (
-        <ScrollView contentContainerStyle={{ padding: SPACING.md, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
-          {tab === "overview" && stats ? (
-            <>
-              {/* Summary chips */}
-              <View style={styles.chipsCard}>
-                <View style={styles.chipsRow}>
-                  <Text style={styles.chip}><Text style={styles.chipNum}>{stats.guest_plays ?? 0}</Text> guests</Text>
-                  <Text style={styles.chipDot}>•</Text>
-                  <Text style={styles.chip}><Text style={styles.chipNum}>{stats.total_plays ?? 0}</Text> plays</Text>
-                  <Text style={styles.chipDot}>•</Text>
-                  <Text style={styles.chip}><Text style={styles.chipNum}>{stats.total_transactions ?? 0}</Text> payments</Text>
-                </View>
-                <View style={styles.chipsRow}>
-                  <Text style={styles.chip}><Text style={styles.chipNum}>{stats.currency} {Number(stats.revenue||0).toLocaleString()}</Text> raised</Text>
-                  <Text style={styles.chipDot}>•</Text>
-                  <Text style={styles.chip}><Text style={styles.chipNum}>{stats.total_users ?? 0}</Text> users</Text>
-                </View>
-              </View>
-              <View style={styles.statGrid}>
-                <StatCard testID="stat-users" icon="people" label="Watumiaji" value={stats.total_users} />
-                <StatCard testID="stat-premium" icon="star" label="Premium" value={stats.premium_users} color={COLORS.warning} />
-                <StatCard testID="stat-songs" icon="musical-notes" label="Nyimbo" value={stats.total_songs} color={COLORS.success} />
-                <StatCard testID="stat-albums" icon="albums" label="Albamu" value={stats.total_albums} />
-                <StatCard testID="stat-plays" icon="play" label="Michezo" value={stats.total_plays} color={COLORS.primaryLight} />
-                <StatCard testID="stat-playlists" icon="list" label="Playlist" value={stats.total_playlists} />
-                <StatCard testID="stat-radio" icon="radio" label="Redio" value={stats.total_radio} color={COLORS.primaryLight} />
-                <StatCard testID="stat-neno" icon="sunny" label="Neno la Leo" value={stats.total_neno} color={COLORS.warning} />
-                <StatCard testID="stat-churches" icon="business" label="Makanisa" value={stats.total_churches} />
-                <StatCard testID="stat-plans" icon="pricetags" label="Vifurushi" value={stats.total_plans} color={COLORS.success} />
-                <StatCard testID="stat-txns" icon="receipt" label="Malipo" value={stats.total_transactions} />
-                <StatCard testID="stat-revenue" icon="cash" label={`Mapato (${stats.currency})`} value={stats.revenue?.toLocaleString()} color={COLORS.success} />
-              </View>
-
-              {/* Plays breakdown: guest vs logged-in */}
-              <Text style={styles.sectionTitle}>Uchambuzi wa Michezo</Text>
-              <View style={styles.breakdown}>
-                <View style={styles.breakItem}>
-                  <Text style={styles.breakNum}>{stats.logged_plays ?? 0}</Text>
-                  <Text style={styles.breakLabel}>Waliojisajili</Text>
-                </View>
-                <View style={styles.breakDivider} />
-                <View style={styles.breakItem}>
-                  <Text style={styles.breakNum}>{stats.guest_plays ?? 0}</Text>
-                  <Text style={styles.breakLabel}>Wageni</Text>
-                </View>
-              </View>
-              {(() => {
-                const g = stats.guest_plays ?? 0; const l = stats.logged_plays ?? 0; const tot = g + l || 1;
-                return (
-                  <View style={styles.barTrack}>
-                    <View style={{ width: `${(l / tot) * 100}%`, backgroundColor: COLORS.primary, height: 10, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} />
-                    <View style={{ width: `${(g / tot) * 100}%`, backgroundColor: COLORS.warning, height: 10, borderTopRightRadius: 6, borderBottomRightRadius: 6 }} />
-                  </View>
-                );
-              })()}
-
-              <Text style={styles.sectionTitle}>Nyimbo Zinazoongoza</Text>
-              {(stats.top_songs || []).map((s: any, i: number) => (
-                <View key={s.song_id} style={styles.topRow}>
-                  <Text style={styles.rank}>{i + 1}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.topTitle} numberOfLines={1}>{s.title}</Text>
-                    <Text style={styles.topSub}>{s.artist_name || "Vibe"}</Text>
-                  </View>
-                  <Text style={styles.topPlays}>{s.plays} ▶</Text>
-                </View>
-              ))}
-
-              {/* Recent transactions */}
-              <Text style={styles.sectionTitle}>Malipo ya Karibuni</Text>
-              {(stats.recent_transactions || []).length === 0 ? (
-                <Text style={styles.topSub}>Hakuna malipo bado.</Text>
-              ) : (
-                (stats.recent_transactions || []).map((t: any, i: number) => (
-                  <View key={i} style={styles.topRow}>
-                    <Ionicons name="checkmark-circle" size={18} color={COLORS.success} />
-                    <View style={{ flex: 1, marginLeft: SPACING.sm }}>
-                      <Text style={styles.topTitle} numberOfLines={1}>{t.plan_id || "Premium"}</Text>
-                      <Text style={styles.topSub} numberOfLines={1}>{t.phone || "-"}</Text>
-                    </View>
-                    <Text style={styles.topPlays}>{stats.currency} {Number(t.amount || 0).toLocaleString()}</Text>
-                  </View>
-                ))
-              )}
-            </>
+        <ScrollView contentContainerStyle={{ padding: SP.md, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+          {tab === "overview" ? (
+            <DashboardOverview
+              overview={overview} trends={trends} demographics={demographics}
+              realtime={realtime} downloadStats={downloadStats} liveListeners={liveListeners}
+            />
           ) : null}
 
           {tab === "content" ? (
@@ -223,7 +201,7 @@ export default function AdminDashboard() {
                   <Ionicons name="add" size={20} color="#fff" />
                   <Text style={styles.actText}>Albamu</Text>
                 </Pressable>
-                <Pressable testID="admin-add-song" style={[styles.actBtn, { backgroundColor: COLORS.success }]} onPress={() => setShowSong(true)}>
+                <Pressable testID="admin-add-song" style={[styles.actBtn, { backgroundColor: C.emerald }]} onPress={() => setShowSong(true)}>
                   <Ionicons name="add" size={20} color="#fff" />
                   <Text style={styles.actText}>Wimbo</Text>
                 </Pressable>
@@ -248,11 +226,11 @@ export default function AdminDashboard() {
                   <View style={styles.userAvatar}>
                     <Ionicons name="person" size={16} color="#fff" />
                   </View>
-                  <View style={{ flex: 1, marginLeft: SPACING.sm }}>
+                  <View style={{ flex: 1, marginLeft: SP.sm }}>
                     <Text style={styles.topTitle} numberOfLines={1}>{u.name || u.email}</Text>
                     <Text style={styles.topSub} numberOfLines={1}>{u.email}</Text>
                   </View>
-                  {u.is_premium ? <Ionicons name="star" size={16} color={COLORS.warning} /> : null}
+                  {u.is_premium ? <Ionicons name="star" size={16} color={C.amber} /> : null}
                   {u.role !== "customer" ? <Text style={styles.roleBadge}>{u.role}</Text> : null}
                 </View>
               ))}
@@ -268,20 +246,20 @@ export default function AdminDashboard() {
         <Pressable style={styles.drawerOverlay} onPress={() => setDrawerOpen(false)}>
           <Pressable style={styles.drawer} onPress={(e) => e.stopPropagation()}>
             <View style={styles.drawerHead}>
-              <Ionicons name="musical-notes" size={20} color={COLORS.primary} />
+              <Ionicons name="musical-notes" size={20} color={C.violet} />
               <Text style={styles.drawerTitle}>Admin Dashboard</Text>
               <Pressable testID="drawer-close" onPress={() => setDrawerOpen(false)} hitSlop={10}>
-                <Ionicons name="close" size={22} color={COLORS.text} />
+                <Ionicons name="close" size={22} color={C.text} />
               </Pressable>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
               {MENU.map((grp) => (
-                <View key={grp.group} style={{ marginBottom: SPACING.md }}>
+                <View key={grp.group} style={{ marginBottom: SP.md }}>
                   <Text style={styles.drawerGroup}>{grp.group}</Text>
                   {grp.items.map((it) => (
                     <Pressable
                       key={it.label}
-                      testID={`menu-${it.tab || it.label}`}
+                      testID={`menu-${(it.tab || it.label).toLowerCase().replace(/\s+/g, "-")}`}
                       style={styles.drawerItem}
                       onPress={() => {
                         setDrawerOpen(false);
@@ -289,8 +267,8 @@ export default function AdminDashboard() {
                         else flash(`${it.label}: Inakuja hivi karibuni`);
                       }}
                     >
-                      <Ionicons name={it.icon as any} size={18} color={it.tab === tab ? COLORS.primary : COLORS.textSecondary} />
-                      <Text style={[styles.drawerLabel, it.tab === tab && { color: COLORS.primary, fontWeight: "800" }]}>{it.label}</Text>
+                      <Ionicons name={it.icon as any} size={18} color={it.tab === tab ? C.violet : C.sub} />
+                      <Text style={[styles.drawerLabel, it.tab === tab && { color: C.violet, fontWeight: "800" }]}>{it.label}</Text>
                     </Pressable>
                   ))}
                 </View>
@@ -323,15 +301,277 @@ export default function AdminDashboard() {
   );
 }
 
-function StatCard({ icon, label, value, color = COLORS.primary, testID }: any) {
+// ============ Dashboard Overview (faithful port of Gracefy Dashboard.jsx) ============
+function DashboardOverview({ overview, trends, demographics, realtime, downloadStats, liveListeners }: any) {
+  const primary = [
+    { label: "Total Users", value: overview?.total_users || 0, icon: "people", color: C.violet, sub: `${overview?.total_customers || 0} customers` },
+    { label: "Total Songs", value: overview?.total_songs || 0, icon: "musical-notes", color: C.emerald, sub: `${overview?.total_albums || 0} albums` },
+    { label: "Churches", value: overview?.total_churches || 0, icon: "business", color: C.amber, sub: `${overview?.total_leaders || 0} leaders` },
+    { label: "Total Raised", value: `${overview?.currency || "TZS"} ${Number(overview?.total_raised || 0).toLocaleString()}`, icon: "heart", color: C.pink, sub: `${overview?.total_donations || 0} campaigns` },
+  ];
+  const secondary = [
+    { label: "Customers", value: overview?.total_customers || 0, icon: "people-outline" },
+    { label: "System Users", value: overview?.total_system_users || 0, icon: "person-add-outline" },
+    { label: "Religious Leaders", value: overview?.total_leaders || 0, icon: "person-outline" },
+    { label: "Pending Approvals", value: overview?.pending_approvals || 0, icon: "checkmark-circle-outline" },
+  ];
+
   return (
-    <View testID={testID} style={styles.statCard}>
-      <Ionicons name={icon} size={22} color={color} />
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+    <View>
+      {/* Page header */}
+      <Text style={styles.pageTitle}>Dashboard</Text>
+      <Text style={styles.pageSub}>Welcome back! Here&apos;s what&apos;s happening with your platform.</Text>
+
+      {/* Live streaming banner */}
+      {(realtime || liveListeners) ? (
+        <LinearGradient colors={["rgba(16,185,129,0.18)", "#18181b", "rgba(139,92,246,0.18)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.banner}>
+          <View style={styles.bannerRowWrap}>
+            <View style={styles.liveDot} />
+            <Text style={[styles.bannerAccent, { color: C.emerald }]}>Live</Text>
+            <Metric num={liveListeners?.total_active_listeners ?? realtime?.active_streams ?? 0} label="active listeners" />
+            <Dot />
+            <Metric num={realtime?.guest_visitors_today ?? 0} label="guest visitors" numColor={C.amber} />
+            <Dot />
+            <Metric num={realtime?.plays_today ?? 0} label="plays today" />
+            <Dot />
+            <Metric num={realtime?.new_users_today ?? 0} label="new users" numColor={C.emerald} />
+            <Dot />
+            <Metric num={realtime?.transactions_today ?? 0} label="txns today" numColor={C.amber} />
+          </View>
+          {liveListeners?.top_playing_now?.length > 0 ? (
+            <View style={styles.nowWrap}>
+              <Text style={styles.nowLabel}>Now Playing:</Text>
+              <View style={styles.chipWrap}>
+                {liveListeners.top_playing_now.slice(0, 3).map((it: any, i: number) => (
+                  <View key={i} style={styles.pill}>
+                    <Text style={styles.pillText}>{it.title} </Text>
+                    <Text style={[styles.pillText, { color: C.emerald }]}>· {it.listeners} listening</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+        </LinearGradient>
+      ) : null}
+
+      {/* Download stats banner */}
+      {downloadStats ? (
+        <LinearGradient colors={["rgba(59,130,246,0.18)", "#18181b", "rgba(99,102,241,0.18)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.banner}>
+          <View style={styles.bannerRowWrap}>
+            <Ionicons name="download" size={15} color={C.blue} />
+            <Text style={[styles.bannerAccent, { color: C.blue, marginLeft: 4 }]}>Downloads</Text>
+            <Metric num={downloadStats.total_downloads || 0} label="total" />
+            <Dot />
+            <Metric num={downloadStats.downloads_today || 0} label="today" />
+            <Dot />
+            <Metric num={downloadStats.downloads_this_week || 0} label="this week" />
+            <Dot />
+            <Metric num={downloadStats.unique_downloaders || 0} label="users" />
+          </View>
+        </LinearGradient>
+      ) : null}
+
+      {/* Primary stats */}
+      <View style={styles.statGrid}>
+        {primary.map((s, i) => (
+          <View key={i} testID={`stat-${i}`} style={styles.statCard}>
+            <View style={[styles.statIcon, { backgroundColor: s.color + "22" }]}>
+              <Ionicons name={s.icon as any} size={20} color={s.color} />
+            </View>
+            <Text style={styles.statValue} numberOfLines={1}>{s.value}</Text>
+            <Text style={styles.statLabel}>{s.label}</Text>
+            <Text style={styles.statSub}>{s.sub}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Secondary stats */}
+      <View style={styles.secGrid}>
+        {secondary.map((s, i) => (
+          <View key={i} style={styles.secCard}>
+            <View style={styles.secHead}>
+              <Ionicons name={s.icon as any} size={14} color={C.muted} />
+              <Text style={styles.secLabel}>{s.label}</Text>
+            </View>
+            <Text style={styles.secValue}>{s.value}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Customer growth (area, 2 series) */}
+      <ChartCard icon="trending-up" iconColor={C.violet} title="Customer Growth" desc="Total customers vs active users over time">
+        {trends?.user_growth?.length ? (
+          <LineChart
+            areaChart curved
+            data={trends.user_growth.map((d: any) => ({ value: d.users, label: d.month }))}
+            data2={trends.user_growth.map((d: any) => ({ value: d.active }))}
+            color1={C.violet} color2={C.emerald}
+            startFillColor1={C.violet} endFillColor1={C.violet} startOpacity={0.3} endOpacity={0.02}
+            startFillColor2={C.emerald} endFillColor2={C.emerald} startOpacity2={0.3} endOpacity2={0.02}
+            thickness={2} hideDataPoints hideRules
+            yAxisColor={C.border} xAxisColor={C.border}
+            yAxisTextStyle={styles.axis} xAxisLabelTextStyle={styles.axis}
+            width={CHART_W - 40} height={180} initialSpacing={10} noOfSections={4}
+            backgroundColor="transparent"
+          />
+        ) : <Empty />}
+        <Legend items={[{ c: C.violet, t: "Total Users" }, { c: C.emerald, t: "Active Users" }]} />
+      </ChartCard>
+
+      {/* Donations trend (area) */}
+      <ChartCard icon="cash" iconColor={C.emerald} title="Donations Trend">
+        {trends?.donations_trend?.length ? (
+          <LineChart
+            areaChart curved
+            data={trends.donations_trend.map((d: any) => ({ value: d.amount, label: d.month }))}
+            color={C.emerald} startFillColor={C.emerald} endFillColor={C.emerald} startOpacity={0.3} endOpacity={0.02}
+            thickness={2} hideDataPoints hideRules
+            yAxisColor={C.border} xAxisColor={C.border}
+            yAxisTextStyle={styles.axis} xAxisLabelTextStyle={styles.axis}
+            width={CHART_W - 40} height={180} initialSpacing={10} noOfSections={4}
+            backgroundColor="transparent"
+          />
+        ) : <Empty />}
+      </ChartCard>
+
+      {/* Content performance (bar) */}
+      <ChartCard icon="play" iconColor={C.amber} title="Content Performance">
+        {trends?.content_performance?.length ? (
+          <BarChart
+            data={trends.content_performance.map((d: any) => ({ value: d.plays, label: d.category, frontColor: C.violet }))}
+            barWidth={26} barBorderRadius={4} spacing={18}
+            yAxisColor={C.border} xAxisColor={C.border}
+            yAxisTextStyle={styles.axis} xAxisLabelTextStyle={styles.axis}
+            height={180} noOfSections={4} initialSpacing={12}
+            backgroundColor="transparent"
+          />
+        ) : <Empty />}
+      </ChartCard>
+
+      {/* Category distribution (pie) */}
+      <ChartCard icon="musical-notes" iconColor={C.pink} title="Category Distribution">
+        {trends?.content_performance?.length ? (
+          <>
+            <View style={{ alignItems: "center", marginVertical: SP.sm }}>
+              <PieChart
+                donut innerRadius={55} radius={90}
+                innerCircleColor={C.card}
+                data={trends.content_performance.map((d: any, i: number) => ({ value: d.plays, color: PIE_COLORS[i % PIE_COLORS.length] }))}
+              />
+            </View>
+            <Legend items={trends.content_performance.map((d: any, i: number) => ({ c: PIE_COLORS[i % PIE_COLORS.length], t: d.category }))} />
+          </>
+        ) : <Empty />}
+      </ChartCard>
+
+      {/* User Demographics */}
+      <View style={styles.demoHead}>
+        <Ionicons name="people" size={20} color={C.violet} />
+        <Text style={styles.demoTitle}>User Demographics</Text>
+      </View>
+
+      <ChartCard icon="phone-portrait" iconColor={C.blue} title="Device Type" small>
+        <DemoPie data={demographics?.device?.data} colorsByName />
+      </ChartCard>
+
+      <ChartCard icon="people" iconColor={C.pink} title="Gender" small>
+        <DemoPie data={demographics?.gender?.data} genderColors />
+      </ChartCard>
+
+      <ChartCard icon="calendar" iconColor={C.amber} title="Age Groups" small>
+        {demographics?.age?.data?.length ? (
+          <BarChart
+            horizontal
+            data={demographics.age.data.map((d: any) => ({ value: d.value, label: d.name, frontColor: C.amber }))}
+            barWidth={16} barBorderRadius={4} spacing={14}
+            yAxisColor={C.border} xAxisColor={C.border}
+            yAxisTextStyle={styles.axis} xAxisLabelTextStyle={styles.axis}
+            height={160} noOfSections={4}
+            backgroundColor="transparent"
+          />
+        ) : <Empty />}
+      </ChartCard>
+
+      <ChartCard icon="location" iconColor={C.emerald} title="Top Locations" desc={`${demographics?.location?.total_locations || 0} countries`} small>
+        {demographics?.location?.data?.length ? (
+          demographics.location.data.slice(0, 8).map((it: any, i: number) => {
+            const pct = Math.min(100, (it.value / (demographics?.total_users || 1)) * 100);
+            return (
+              <View key={i} style={styles.locRow}>
+                <Text style={styles.locRank}>{i + 1}.</Text>
+                <Text style={styles.locName} numberOfLines={1}>{it.name}</Text>
+                <View style={styles.locBarTrack}>
+                  <View style={[styles.locBarFill, { width: `${pct}%` }]} />
+                </View>
+                <Text style={styles.locVal}>{it.value}</Text>
+              </View>
+            );
+          })
+        ) : <Text style={styles.emptyText}>No location data yet</Text>}
+      </ChartCard>
     </View>
   );
 }
+
+function Metric({ num, label, numColor = C.text }: any) {
+  return (
+    <Text style={styles.metric}>
+      <Text style={[styles.metricNum, { color: numColor }]}>{Number(num).toLocaleString()}</Text> {label}
+    </Text>
+  );
+}
+const Dot = () => <Text style={styles.metricDot}>•</Text>;
+
+function ChartCard({ icon, iconColor, title, desc, small, children }: any) {
+  return (
+    <View style={styles.chartCard}>
+      <View style={styles.chartHead}>
+        <Ionicons name={icon} size={small ? 16 : 18} color={iconColor} />
+        <Text style={[styles.chartTitle, small && { fontSize: 13 }]}>{title}</Text>
+      </View>
+      {desc ? <Text style={styles.chartDesc}>{desc}</Text> : null}
+      {children}
+    </View>
+  );
+}
+
+function Legend({ items }: any) {
+  return (
+    <View style={styles.legendWrap}>
+      {items.map((it: any, i: number) => (
+        <View key={i} style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: it.c }]} />
+          <Text style={styles.legendText}>{it.t}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function DemoPie({ data, colorsByName, genderColors }: any) {
+  if (!data?.length) return <Empty />;
+  const DEV: Record<string, string> = { ANDROID: "#3ddc84", IOS: "#a1a1aa", WEB: "#3b82f6", UNKNOWN: "#6b7280" };
+  const colorFor = (name: string, i: number) =>
+    colorsByName ? (DEV[name] || PIE_COLORS[i % PIE_COLORS.length]) : genderColors ? GENDER_COLORS[i % GENDER_COLORS.length] : PIE_COLORS[i % PIE_COLORS.length];
+  return (
+    <>
+      <View style={{ alignItems: "center", marginVertical: SP.sm }}>
+        <PieChart donut innerRadius={38} radius={62} innerCircleColor={C.card}
+          data={data.map((d: any, i: number) => ({ value: d.value, color: colorFor(d.name, i) }))} />
+      </View>
+      <View style={styles.legendWrap}>
+        {data.map((d: any, i: number) => (
+          <View key={i} style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: colorFor(d.name, i) }]} />
+            <Text style={styles.legendText}>{d.name}: {d.value}</Text>
+          </View>
+        ))}
+      </View>
+    </>
+  );
+}
+
+const Empty = () => <Text style={styles.emptyText}>No data yet</Text>;
 
 function FormModal({ visible, title, fields, onClose, onSave, testID }: any) {
   return (
@@ -341,7 +581,7 @@ function FormModal({ visible, title, fields, onClose, onSave, testID }: any) {
           <View style={styles.handle} />
           <Text style={styles.modalTitle}>{title}</Text>
           {fields.map((f: any) => (
-            <View key={f.key} style={{ marginBottom: SPACING.sm }}>
+            <View key={f.key} style={{ marginBottom: SP.sm }}>
               <Text style={styles.fieldLabel}>{f.label}</Text>
               <TextInput
                 testID={`${testID}-${f.key}`}
@@ -349,7 +589,7 @@ function FormModal({ visible, title, fields, onClose, onSave, testID }: any) {
                 value={f.value}
                 onChangeText={f.set}
                 placeholder={f.label}
-                placeholderTextColor={COLORS.textMuted}
+                placeholderTextColor={C.muted}
                 autoCapitalize="none"
               />
             </View>
@@ -367,65 +607,104 @@ function FormModal({ visible, title, fields, onClose, onSave, testID }: any) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
-  center: { flex: 1, backgroundColor: COLORS.background, alignItems: "center", justifyContent: "center", padding: SPACING.lg },
-  denied: { color: COLORS.text, fontSize: FONT.lg, fontWeight: "700", marginTop: SPACING.md },
-  deniedSub: { color: COLORS.textSecondary, fontSize: FONT.md, textAlign: "center", marginTop: SPACING.sm, paddingHorizontal: SPACING.lg },
-  ghostBtn: { paddingVertical: SPACING.md, marginTop: SPACING.sm },
-  ghostBtnText: { color: COLORS.textMuted, fontSize: FONT.md, fontWeight: "600" },
-  primary: { backgroundColor: COLORS.primary, borderRadius: RADIUS.full, paddingHorizontal: SPACING.xl, height: 48, alignItems: "center", justifyContent: "center", marginTop: SPACING.lg },
+  root: { flex: 1, backgroundColor: C.bg },
+  center: { flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center", padding: SP.lg },
+  denied: { color: C.text, fontSize: 16, fontWeight: "700", marginTop: SP.md },
+  deniedSub: { color: C.sub, fontSize: 14, textAlign: "center", marginTop: SP.sm, paddingHorizontal: SP.lg },
+  ghostBtn: { paddingVertical: SP.md, marginTop: SP.sm },
+  ghostBtnText: { color: C.muted, fontSize: 14, fontWeight: "600" },
+  primary: { backgroundColor: C.violet, borderRadius: 9999, paddingHorizontal: SP.xl, height: 48, alignItems: "center", justifyContent: "center", marginTop: SP.lg },
   primaryText: { color: "#fff", fontWeight: "800" },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: SPACING.md },
-  h1: { color: COLORS.text, fontSize: FONT.xl, fontWeight: "800" },
-  chipsCard: { backgroundColor: COLORS.card, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.border, marginBottom: SPACING.md },
-  chipsRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", paddingVertical: 2 },
-  chip: { color: COLORS.textSecondary, fontSize: FONT.sm },
-  chipNum: { color: COLORS.text, fontWeight: "800" },
-  chipDot: { color: COLORS.textMuted, marginHorizontal: SPACING.sm },
-  drawerOverlay: { flex: 1, backgroundColor: COLORS.overlay, flexDirection: "row" },
-  drawer: { width: "78%", maxWidth: 320, height: "100%", backgroundColor: COLORS.surface, borderRightWidth: 1, borderRightColor: COLORS.border, padding: SPACING.md, paddingTop: SPACING.xl },
-  drawerHead: { flexDirection: "row", alignItems: "center", marginBottom: SPACING.lg },
-  drawerTitle: { flex: 1, color: COLORS.text, fontSize: FONT.lg, fontWeight: "800", marginLeft: SPACING.sm },
-  drawerGroup: { color: COLORS.textMuted, fontSize: FONT.xs, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1, marginBottom: SPACING.xs, marginTop: SPACING.xs },
-  drawerItem: { flexDirection: "row", alignItems: "center", paddingVertical: SPACING.sm, paddingLeft: SPACING.sm },
-  drawerLabel: { color: COLORS.text, fontSize: FONT.md, marginLeft: SPACING.md, fontWeight: "600" },
-  segment: { flexDirection: "row", marginHorizontal: SPACING.md, backgroundColor: COLORS.surface, borderRadius: RADIUS.md, padding: 4 },
-  segBtn: { flex: 1, paddingVertical: SPACING.sm, borderRadius: RADIUS.sm, alignItems: "center" },
-  segActive: { backgroundColor: COLORS.primary },
-  segText: { color: COLORS.textSecondary, fontWeight: "700", fontSize: FONT.sm },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: SP.md },
+  h1: { color: C.text, fontSize: 20, fontWeight: "800" },
+
+  segment: { flexDirection: "row", marginHorizontal: SP.md, backgroundColor: C.card, borderRadius: 10, padding: 4 },
+  segBtn: { flex: 1, paddingVertical: SP.sm, borderRadius: 8, alignItems: "center" },
+  segActive: { backgroundColor: C.violet },
+  segText: { color: C.sub, fontWeight: "700", fontSize: 12 },
   segTextActive: { color: "#fff" },
+
+  pageTitle: { color: C.text, fontSize: 24, fontWeight: "800" },
+  pageSub: { color: C.muted, fontSize: 12, marginTop: 2, marginBottom: SP.md },
+
+  banner: { borderRadius: 14, padding: SP.md, marginBottom: SP.md, borderWidth: 1, borderColor: C.border },
+  bannerRowWrap: { flexDirection: "row", alignItems: "center", flexWrap: "wrap" },
+  bannerAccent: { fontWeight: "700", fontSize: 13, marginRight: 6 },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.emerald, marginRight: 6 },
+  metric: { color: C.sub, fontSize: 12, marginRight: 4 },
+  metricNum: { fontWeight: "800" },
+  metricDot: { color: C.muted, marginHorizontal: 4 },
+  nowWrap: { marginTop: SP.sm, paddingTop: SP.sm, borderTopWidth: 1, borderTopColor: "rgba(63,63,70,0.5)" },
+  nowLabel: { color: C.muted, fontSize: 11, marginBottom: 6 },
+  chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  pill: { backgroundColor: "rgba(39,39,42,0.6)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 9999, flexDirection: "row" },
+  pillText: { color: C.text, fontSize: 11 },
+
   statGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
-  statCard: { width: "31%", backgroundColor: COLORS.card, borderRadius: RADIUS.md, padding: SPACING.md, marginBottom: SPACING.sm, borderWidth: 1, borderColor: COLORS.border, alignItems: "flex-start" },
-  breakdown: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.card, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.border, marginBottom: SPACING.sm },
-  breakItem: { flex: 1, alignItems: "center" },
-  breakNum: { color: COLORS.text, fontSize: FONT.xxl, fontWeight: "800" },
-  breakLabel: { color: COLORS.textSecondary, fontSize: FONT.sm, marginTop: 2 },
-  breakDivider: { width: 1, height: 40, backgroundColor: COLORS.border },
-  barTrack: { flexDirection: "row", width: "100%", height: 10, borderRadius: 6, backgroundColor: COLORS.surface, overflow: "hidden", marginBottom: SPACING.sm },
-  statValue: { color: COLORS.text, fontSize: FONT.xl, fontWeight: "800", marginTop: SPACING.xs },
-  statLabel: { color: COLORS.textSecondary, fontSize: FONT.xs, marginTop: 2 },
-  sectionTitle: { color: COLORS.text, fontSize: FONT.lg, fontWeight: "800", marginTop: SPACING.lg, marginBottom: SPACING.sm },
-  topRow: { flexDirection: "row", alignItems: "center", paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.divider },
-  rank: { width: 28, color: COLORS.primary, fontWeight: "800", fontSize: FONT.md },
-  topTitle: { color: COLORS.text, fontSize: FONT.md, fontWeight: "600" },
-  topSub: { color: COLORS.textSecondary, fontSize: FONT.sm, marginTop: 2 },
-  topPlays: { color: COLORS.textMuted, fontSize: FONT.sm },
-  actionRow: { flexDirection: "row", gap: SPACING.sm, marginBottom: SPACING.sm },
-  actBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primary, borderRadius: RADIUS.md, height: 46 },
+  statCard: { width: "48.5%", backgroundColor: C.cardAlt, borderRadius: 12, padding: SP.md, marginBottom: SP.sm, borderWidth: 1, borderColor: C.border },
+  statIcon: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  statValue: { color: C.text, fontSize: 22, fontWeight: "800", marginTop: SP.sm },
+  statLabel: { color: C.sub, fontSize: 13, marginTop: 2 },
+  statSub: { color: C.muted, fontSize: 11, marginTop: 2 },
+
+  secGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginTop: SP.xs, marginBottom: SP.md },
+  secCard: { width: "48.5%", backgroundColor: "rgba(24,24,27,0.4)", borderRadius: 10, padding: SP.md, marginBottom: SP.sm, borderWidth: 1, borderColor: "rgba(39,39,42,0.5)" },
+  secHead: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
+  secLabel: { color: C.muted, fontSize: 11, marginLeft: 6 },
+  secValue: { color: C.text, fontSize: 18, fontWeight: "700" },
+
+  chartCard: { backgroundColor: C.cardAlt, borderRadius: 12, padding: SP.md, borderWidth: 1, borderColor: C.border, marginBottom: SP.md },
+  chartHead: { flexDirection: "row", alignItems: "center" },
+  chartTitle: { color: C.text, fontSize: 15, fontWeight: "700", marginLeft: 8 },
+  chartDesc: { color: C.muted, fontSize: 11, marginTop: 2, marginBottom: SP.sm },
+  axis: { color: C.muted, fontSize: 10 },
+
+  legendWrap: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 12, marginTop: SP.sm },
+  legendItem: { flexDirection: "row", alignItems: "center" },
+  legendDot: { width: 10, height: 10, borderRadius: 5, marginRight: 6 },
+  legendText: { color: C.sub, fontSize: 11 },
+
+  demoHead: { flexDirection: "row", alignItems: "center", marginTop: SP.sm, marginBottom: SP.sm },
+  demoTitle: { color: C.text, fontSize: 18, fontWeight: "800", marginLeft: 8 },
+
+  locRow: { flexDirection: "row", alignItems: "center", paddingVertical: 5 },
+  locRank: { width: 20, color: C.muted, fontSize: 11 },
+  locName: { flex: 1, color: C.sub, fontSize: 13 },
+  locBarTrack: { width: 64, height: 6, borderRadius: 3, backgroundColor: C.border, overflow: "hidden", marginHorizontal: 8 },
+  locBarFill: { height: "100%", backgroundColor: C.emerald, borderRadius: 3 },
+  locVal: { width: 32, textAlign: "right", color: C.sub, fontSize: 11 },
+
+  emptyText: { color: C.muted, fontSize: 12, textAlign: "center", paddingVertical: SP.lg },
+
+  sectionTitle: { color: C.text, fontSize: 16, fontWeight: "800", marginTop: SP.lg, marginBottom: SP.sm },
+  topTitle: { color: C.text, fontSize: 14, fontWeight: "600" },
+  topSub: { color: C.sub, fontSize: 12, marginTop: 2 },
+  actionRow: { flexDirection: "row", gap: SP.sm, marginBottom: SP.sm },
+  actBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: C.violet, borderRadius: 8, height: 46 },
   actText: { color: "#fff", fontWeight: "800", marginLeft: 4 },
-  contentRow: { flexDirection: "row", alignItems: "center", paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.divider },
-  userAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center" },
-  roleBadge: { color: COLORS.warning, fontSize: FONT.xs, fontWeight: "800", marginLeft: SPACING.sm, textTransform: "uppercase" },
-  toast: { position: "absolute", bottom: 40, left: SPACING.lg, right: SPACING.lg, backgroundColor: COLORS.card, borderRadius: RADIUS.md, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.border },
-  toastText: { color: COLORS.text, textAlign: "center", fontWeight: "600" },
-  overlay: { flex: 1, backgroundColor: COLORS.overlay, justifyContent: "flex-end" },
-  sheet: { backgroundColor: COLORS.card, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, padding: SPACING.lg, paddingBottom: SPACING.xxl },
-  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border, alignSelf: "center", marginBottom: SPACING.md },
-  modalTitle: { color: COLORS.text, fontSize: FONT.xl, fontWeight: "800", marginBottom: SPACING.md },
-  fieldLabel: { color: COLORS.textSecondary, fontSize: FONT.sm, marginBottom: 4 },
-  input: { backgroundColor: COLORS.surface, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, height: 46, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border },
-  saveBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.full, height: 50, alignItems: "center", justifyContent: "center", marginTop: SPACING.sm },
-  saveText: { color: "#fff", fontWeight: "800", fontSize: FONT.md },
-  cancelBtn: { alignItems: "center", paddingVertical: SPACING.md },
-  cancelText: { color: COLORS.textMuted },
+  contentRow: { flexDirection: "row", alignItems: "center", paddingVertical: SP.sm, borderBottomWidth: 1, borderBottomColor: C.border },
+  userAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: C.violet, alignItems: "center", justifyContent: "center" },
+  roleBadge: { color: C.amber, fontSize: 10, fontWeight: "800", marginLeft: SP.sm, textTransform: "uppercase" },
+
+  toast: { position: "absolute", bottom: 40, left: SP.lg, right: SP.lg, backgroundColor: C.card, borderRadius: 8, padding: SP.md, borderWidth: 1, borderColor: C.border },
+  toastText: { color: C.text, textAlign: "center", fontWeight: "600" },
+
+  drawerOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", flexDirection: "row" },
+  drawer: { width: "78%", maxWidth: 320, height: "100%", backgroundColor: C.card, borderRightWidth: 1, borderRightColor: C.border, padding: SP.md, paddingTop: SP.xl },
+  drawerHead: { flexDirection: "row", alignItems: "center", marginBottom: SP.lg },
+  drawerTitle: { flex: 1, color: C.text, fontSize: 16, fontWeight: "800", marginLeft: SP.sm },
+  drawerGroup: { color: C.muted, fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1, marginBottom: SP.xs, marginTop: SP.xs },
+  drawerItem: { flexDirection: "row", alignItems: "center", paddingVertical: SP.sm, paddingLeft: SP.sm },
+  drawerLabel: { color: C.text, fontSize: 14, marginLeft: SP.md, fontWeight: "600" },
+
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
+  sheet: { backgroundColor: C.card, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: SP.lg, paddingBottom: SP.xl },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: "center", marginBottom: SP.md },
+  modalTitle: { color: C.text, fontSize: 20, fontWeight: "800", marginBottom: SP.md },
+  fieldLabel: { color: C.sub, fontSize: 12, marginBottom: 4 },
+  input: { backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: SP.md, height: 46, color: C.text, borderWidth: 1, borderColor: C.border },
+  saveBtn: { backgroundColor: C.violet, borderRadius: 9999, height: 50, alignItems: "center", justifyContent: "center", marginTop: SP.sm },
+  saveText: { color: "#fff", fontWeight: "800", fontSize: 14 },
+  cancelBtn: { alignItems: "center", paddingVertical: SP.md },
+  cancelText: { color: C.muted },
 });
