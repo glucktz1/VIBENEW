@@ -7,6 +7,34 @@ import { adminApi, musicApi } from "@/src/services/api";
 import { useAuth } from "@/src/context/AuthContext";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 
+const MENU = [
+  { group: "Reports & Analytics", items: [
+    { label: "Dashboard", icon: "grid", tab: "overview" },
+    { label: "Analytics", icon: "stats-chart", tab: "overview" },
+    { label: "Revenue", icon: "cash", tab: "overview" },
+    { label: "Transactions", icon: "receipt", tab: "overview" },
+  ]},
+  { group: "Contents", items: [
+    { label: "Songs & Albums", icon: "musical-notes", tab: "content" },
+    { label: "Live Radio", icon: "radio" },
+    { label: "Neno la Leo", icon: "sunny" },
+    { label: "Bible", icon: "book" },
+  ]},
+  { group: "Control & Management", items: [
+    { label: "App Users", icon: "people", tab: "users" },
+    { label: "Admin Users", icon: "shield-checkmark", tab: "users" },
+    { label: "Churches", icon: "business" },
+    { label: "Religious Leaders", icon: "person" },
+    { label: "Choir & Singers", icon: "mic" },
+    { label: "Donations", icon: "heart" },
+    { label: "Subscriptions", icon: "pricetags" },
+  ]},
+  { group: "System", items: [
+    { label: "Settings", icon: "settings" },
+    { label: "Feedback", icon: "chatbubbles" },
+  ]},
+];
+
 export default function AdminDashboard() {
   const router = useRouter();
   const { isAdmin, isGuest, loading: authLoading } = useAuth();
@@ -15,6 +43,7 @@ export default function AdminDashboard() {
   const [albums, setAlbums] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"overview" | "content" | "users">("overview");
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [toast, setToast] = useState("");
 
   // add forms
@@ -78,11 +107,13 @@ export default function AdminDashboard() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
-        <Pressable testID="admin-back" onPress={() => router.back()} hitSlop={10}>
-          <Ionicons name="chevron-back" size={26} color={COLORS.text} />
+        <Pressable testID="admin-menu" onPress={() => setDrawerOpen(true)} hitSlop={10}>
+          <Ionicons name="menu" size={26} color={COLORS.text} />
         </Pressable>
-        <Text style={styles.h1}>Dashibodi</Text>
-        <Ionicons name="shield-checkmark" size={22} color={COLORS.warning} />
+        <Text style={styles.h1}>Admin Dashboard</Text>
+        <Pressable testID="admin-back" onPress={() => router.replace("/(tabs)")} hitSlop={10}>
+          <Ionicons name="home" size={22} color={COLORS.textSecondary} />
+        </Pressable>
       </View>
 
       <View style={styles.segment}>
@@ -101,6 +132,21 @@ export default function AdminDashboard() {
         <ScrollView contentContainerStyle={{ padding: SPACING.md, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
           {tab === "overview" && stats ? (
             <>
+              {/* Summary chips */}
+              <View style={styles.chipsCard}>
+                <View style={styles.chipsRow}>
+                  <Text style={styles.chip}><Text style={styles.chipNum}>{stats.guest_plays ?? 0}</Text> guests</Text>
+                  <Text style={styles.chipDot}>•</Text>
+                  <Text style={styles.chip}><Text style={styles.chipNum}>{stats.total_plays ?? 0}</Text> plays</Text>
+                  <Text style={styles.chipDot}>•</Text>
+                  <Text style={styles.chip}><Text style={styles.chipNum}>{stats.total_transactions ?? 0}</Text> payments</Text>
+                </View>
+                <View style={styles.chipsRow}>
+                  <Text style={styles.chip}><Text style={styles.chipNum}>{stats.currency} {Number(stats.revenue||0).toLocaleString()}</Text> raised</Text>
+                  <Text style={styles.chipDot}>•</Text>
+                  <Text style={styles.chip}><Text style={styles.chipNum}>{stats.total_users ?? 0}</Text> users</Text>
+                </View>
+              </View>
               <View style={styles.statGrid}>
                 <StatCard testID="stat-users" icon="people" label="Watumiaji" value={stats.total_users} />
                 <StatCard testID="stat-premium" icon="star" label="Premium" value={stats.premium_users} color={COLORS.warning} />
@@ -217,6 +263,44 @@ export default function AdminDashboard() {
 
       {toast ? <View style={styles.toast}><Text style={styles.toastText}>{toast}</Text></View> : null}
 
+      {/* Side drawer navigation */}
+      <Modal transparent visible={drawerOpen} animationType="slide" onRequestClose={() => setDrawerOpen(false)}>
+        <Pressable style={styles.drawerOverlay} onPress={() => setDrawerOpen(false)}>
+          <Pressable style={styles.drawer} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.drawerHead}>
+              <Ionicons name="musical-notes" size={20} color={COLORS.primary} />
+              <Text style={styles.drawerTitle}>Admin Dashboard</Text>
+              <Pressable testID="drawer-close" onPress={() => setDrawerOpen(false)} hitSlop={10}>
+                <Ionicons name="close" size={22} color={COLORS.text} />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {MENU.map((grp) => (
+                <View key={grp.group} style={{ marginBottom: SPACING.md }}>
+                  <Text style={styles.drawerGroup}>{grp.group}</Text>
+                  {grp.items.map((it) => (
+                    <Pressable
+                      key={it.label}
+                      testID={`menu-${it.tab || it.label}`}
+                      style={styles.drawerItem}
+                      onPress={() => {
+                        setDrawerOpen(false);
+                        if (it.tab) setTab(it.tab as any);
+                        else flash(`${it.label}: Inakuja hivi karibuni`);
+                      }}
+                    >
+                      <Ionicons name={it.icon as any} size={18} color={it.tab === tab ? COLORS.primary : COLORS.textSecondary} />
+                      <Text style={[styles.drawerLabel, it.tab === tab && { color: COLORS.primary, fontWeight: "800" }]}>{it.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ))}
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Add album modal */}
       <FormModal
         visible={showAlbum} title="Ongeza Albamu" onClose={() => setShowAlbum(false)} onSave={createAlbum} testID="album-form"
@@ -293,6 +377,18 @@ const styles = StyleSheet.create({
   primaryText: { color: "#fff", fontWeight: "800" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: SPACING.md },
   h1: { color: COLORS.text, fontSize: FONT.xl, fontWeight: "800" },
+  chipsCard: { backgroundColor: COLORS.card, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.border, marginBottom: SPACING.md },
+  chipsRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", paddingVertical: 2 },
+  chip: { color: COLORS.textSecondary, fontSize: FONT.sm },
+  chipNum: { color: COLORS.text, fontWeight: "800" },
+  chipDot: { color: COLORS.textMuted, marginHorizontal: SPACING.sm },
+  drawerOverlay: { flex: 1, backgroundColor: COLORS.overlay, flexDirection: "row" },
+  drawer: { width: "78%", maxWidth: 320, height: "100%", backgroundColor: COLORS.surface, borderRightWidth: 1, borderRightColor: COLORS.border, padding: SPACING.md, paddingTop: SPACING.xl },
+  drawerHead: { flexDirection: "row", alignItems: "center", marginBottom: SPACING.lg },
+  drawerTitle: { flex: 1, color: COLORS.text, fontSize: FONT.lg, fontWeight: "800", marginLeft: SPACING.sm },
+  drawerGroup: { color: COLORS.textMuted, fontSize: FONT.xs, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1, marginBottom: SPACING.xs, marginTop: SPACING.xs },
+  drawerItem: { flexDirection: "row", alignItems: "center", paddingVertical: SPACING.sm, paddingLeft: SPACING.sm },
+  drawerLabel: { color: COLORS.text, fontSize: FONT.md, marginLeft: SPACING.md, fontWeight: "600" },
   segment: { flexDirection: "row", marginHorizontal: SPACING.md, backgroundColor: COLORS.surface, borderRadius: RADIUS.md, padding: 4 },
   segBtn: { flex: 1, paddingVertical: SPACING.sm, borderRadius: RADIUS.sm, alignItems: "center" },
   segActive: { backgroundColor: COLORS.primary },

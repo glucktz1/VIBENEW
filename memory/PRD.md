@@ -23,6 +23,12 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - Recommendation engine: weighted scoring (same_album=100, genre=40, popularity=25, artist=20, recency=15) + diversity fallback (cap consecutive same-artist)
 - Subscription plans: Kwa Siku 500, Kwa Wiki 2000, Kwa Mwezi 5500 TZS (simulated Azam Pay)
 
+## What's Been Implemented — Session 7 (Aug 14, 2026) — Admin Dashboard Redesign
+- ✅ Dark side-drawer menu (hamburger) with grouped sections: Reports & Analytics, Contents, Control & Management, System
+- ✅ Drawer items navigate to Overview/Content/Users; unbuilt sections show "Inakuja hivi karibuni" toast
+- ✅ Summary chips card (guests · plays · payments / raised · users) on Overview
+- ✅ Testing: 10/10 backend + full admin drawer/navigation verified
+
 ## What's Been Implemented — Session 6 (Aug 14, 2026) — Admin Dashboard Enrichment
 - ✅ /api/admin/stats now returns radio/churches/neno/plans/transactions counts + guest vs logged plays + recent_transactions
 - ✅ Admin Overview: 12 stat cards, plays breakdown bar (logged vs guest), top songs, recent payments
