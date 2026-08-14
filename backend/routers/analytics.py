@@ -5,7 +5,7 @@ React Native dashboard renders 1:1 with the original web dashboard.
 """
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from db import db
 from auth_utils import require_admin
@@ -241,3 +241,164 @@ async def live_listeners(admin: dict = Depends(require_admin)):
         "top_playing_now": top_playing_now,
         "timestamp": now.isoformat(),
     }
+
+
+PLATFORM_CUT = 0.30  # platform keeps 30%, artist gets 70%
+PER_PLAY = 50  # simulated TZS earned per play
+
+
+async def _avg_song_minutes() -> float:
+    songs = await db.songs.find({}, {"_id": 0, "duration": 1}).to_list(5000)
+    durs = [s.get("duration") for s in songs if s.get("duration")]
+    if not durs:
+        return 3.5
+    return round((sum(durs) / len(durs)) / 60.0, 1)
+
+
+@router.get("/enhanced")
+async def enhanced(period: str = "30d", admin: dict = Depends(require_admin)):
+    total_streams = await db.play_events.count_documents({})
+    revenue_streams = await db.play_events.count_documents({"is_guest": False})
+    listener_ids = await db.play_events.distinct("user_id", {"user_id": {"$ne": None}})
+    song_ids = await db.play_events.distinct("song_id", {"song_id": {"$ne": None}})
+    avg_min = await _avg_song_minutes()
+    total_hours = round(total_streams * avg_min / 60.0, 1)
+
+    txns = await db.transactions.find({"status": "completed"}, {"_id": 0, "amount": 1}).to_list(10000)
+    gross = sum(t.get("amount", 0) for t in txns)
+
+    top = await db.songs.find({}, {"_id": 0, "title": 1, "plays": 1, "artist_name": 1}).sort("plays", -1).limit(8).to_list(8)
+    cat = await db.albums.aggregate([
+        {"$group": {"_id": "$category_name", "value": {"$sum": {"$ifNull": ["$total_plays", 0]}}}},
+        {"$sort": {"value": -1}}, {"$limit": 6},
+    ]).to_list(6)
+
+    return {
+        "period": period,
+        "overview": {
+            "total_streams": total_streams,
+            "revenue_streams": revenue_streams,
+            "unique_listeners": len(listener_ids),
+            "total_listening_hours": total_hours,
+            "avg_session_duration": avg_min,
+            "gross_revenue": gross,
+            "platform_revenue": round(gross * PLATFORM_CUT),
+            "unique_songs_played": len(song_ids),
+        },
+        "top_songs": [{"title": t.get("title"), "artist": t.get("artist_name"), "plays": t.get("plays", 0)} for t in top],
+        "category_breakdown": [{"name": c["_id"] or "Uncategorized", "value": c["value"]} for c in cat if c["value"] > 0],
+    }
+
+
+@router.get("/revenue-overview")
+async def revenue_overview(admin: dict = Depends(require_admin)):
+    txns = await db.transactions.find({"status": "completed"}, {"_id": 0, "amount": 1}).to_list(10000)
+    gross = sum(t.get("amount", 0) for t in txns)
+    total_streams = await db.play_events.count_documents({})
+    avg_min = await _avg_song_minutes()
+    total_hours = round(total_streams * avg_min / 60.0, 1)
+
+    # daily revenue, last 14 days
+    now = datetime.now(timezone.utc)
+    daily = []
+    for i in range(13, -1, -1):
+        day = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+        nxt = day + timedelta(days=1)
+        rows = await db.transactions.find(
+            {"status": "completed", "created_at": {"$gte": day, "$lt": nxt}}, {"_id": 0, "amount": 1}
+        ).to_list(5000)
+        daily.append({"date": day.strftime("%d/%m"), "amount": sum(r.get("amount", 0) for r in rows)})
+
+    # per-artist earnings (simulated from plays of their songs)
+    artists = await db.artists.find({}, {"_id": 0, "artist_id": 1, "name": 1}).to_list(500)
+    all_artists = []
+    for a in artists:
+        ids = await db.songs.distinct("song_id", {"artist_id": a["artist_id"]})
+        plays = await db.play_events.count_documents({"song_id": {"$in": ids}}) if ids else 0
+        earned = plays * PER_PLAY
+        all_artists.append({
+            "name": a["name"], "plays": plays,
+            "gross": earned, "net": round(earned * (1 - PLATFORM_CUT)),
+        })
+    all_artists.sort(key=lambda x: x["gross"], reverse=True)
+
+    top_albums = await db.albums.find({}, {"_id": 0, "title": 1, "total_plays": 1, "artist_name": 1}).sort("total_plays", -1).limit(5).to_list(5)
+
+    return {
+        "currency": "TZS",
+        "total_listening_hours": total_hours,
+        "gross_revenue": gross,
+        "platform_earnings": round(gross * PLATFORM_CUT),
+        "artist_payouts": round(gross * (1 - PLATFORM_CUT)),
+        "daily": daily,
+        "top_artists": all_artists[:5],
+        "top_albums": [{"title": t.get("title"), "artist": t.get("artist_name"), "plays": t.get("total_plays", 0)} for t in top_albums],
+        "all_artists": all_artists,
+    }
+
+
+@router.get("/transactions")
+async def admin_transactions(
+    status: str = Query("all"),
+    gateway: str = Query("all"),
+    q: str = Query(""),
+    admin: dict = Depends(require_admin),
+):
+    query: dict = {}
+    if status != "all":
+        query["status"] = status
+    if q:
+        query["$or"] = [
+            {"phone": {"$regex": q, "$options": "i"}},
+            {"plan_id": {"$regex": q, "$options": "i"}},
+            {"user_id": {"$regex": q, "$options": "i"}},
+        ]
+    rows = await db.transactions.find(query, {"_id": 0}).sort("created_at", -1).limit(200).to_list(200)
+    for r in rows:
+        r["gateway"] = r.get("gateway", "azampay_simulated")
+        if r.get("created_at"):
+            r["created_at"] = str(r["created_at"])
+
+    all_rows = await db.transactions.find({}, {"_id": 0, "amount": 1, "status": 1}).to_list(20000)
+    completed_rev = sum(r.get("amount", 0) for r in all_rows if r.get("status") == "completed")
+    return {
+        "summary": {
+            "total": len(all_rows),
+            "completed_revenue": completed_rev,
+            "pending": sum(1 for r in all_rows if r.get("status") == "pending"),
+            "failed": sum(1 for r in all_rows if r.get("status") in ("failed", "cancelled")),
+            "currency": "TZS",
+        },
+        "gateways": ["azampay_simulated"],
+        "transactions": rows,
+    }
+
+
+@router.get("/location-overview")
+async def location_overview(admin: dict = Depends(require_admin)):
+    users = await db.users.find({}, {"_id": 0, "country": 1, "location": 1, "created_at": 1}).to_list(10000)
+    countries: dict = {}
+    for u in users:
+        loc = u.get("country") or u.get("location") or "Tanzania"
+        if isinstance(loc, dict):
+            loc = loc.get("country") or loc.get("name") or "Tanzania"
+        countries[str(loc)] = countries.get(str(loc), 0) + 1
+    country_list = sorted(countries.items(), key=lambda x: x[1], reverse=True)
+
+    # growth per month (last 6) cumulative
+    now = datetime.now(timezone.utc)
+    growth = []
+    cumulative = 0
+    for i in range(5, -1, -1):
+        start, end, label = _month_bounds(now, i)
+        new = await db.users.count_documents({"created_at": {"$gte": start, "$lt": end}})
+        cumulative = await db.users.count_documents({"created_at": {"$lt": end}})
+        growth.append({"month": label, "new": new, "cumulative": cumulative})
+
+    return {
+        "total_users": len(users),
+        "total_countries": len(countries),
+        "countries": [{"name": k, "value": v} for k, v in country_list],
+        "growth": growth,
+    }
+

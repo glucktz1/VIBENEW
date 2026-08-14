@@ -95,4 +95,8 @@ export const adminApi = {
   realtime: () => api.get<any>("/analytics/realtime"),
   downloadStats: () => api.get<any>("/analytics/download-stats"),
   liveListeners: () => api.get<any>("/analytics/live-listeners"),
+  enhanced: () => api.get<any>("/analytics/enhanced"),
+  revenueOverview: () => api.get<any>("/analytics/revenue-overview"),
+  transactions: (status = "all", q = "") => api.get<any>(`/analytics/transactions?status=${status}&q=${encodeURIComponent(q)}`),
+  locationOverview: () => api.get<any>("/analytics/location-overview"),
 };

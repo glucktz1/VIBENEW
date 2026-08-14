@@ -38,10 +38,10 @@ const CHART_W = Dimensions.get("window").width - 2 * SP.md - 2 * SP.md;
 const NAV: any[] = [
   { type: "group", key: "reports", label: "Reports & Analytics", icon: "trending-up", items: [
     { label: "Dashboard", icon: "grid", tab: "overview" },
-    { label: "Analytics", icon: "pulse" },
-    { label: "Location Analytics", icon: "location" },
-    { label: "Revenue", icon: "cash" },
-    { label: "Transactions", icon: "receipt" },
+    { label: "Analytics", icon: "pulse", tab: "analytics" },
+    { label: "Location Analytics", icon: "location", tab: "location" },
+    { label: "Revenue", icon: "cash", tab: "revenue" },
+    { label: "Transactions", icon: "receipt", tab: "transactions" },
     { label: "Withdrawals", icon: "card", tab: "withdrawals" },
   ]},
   { type: "group", key: "contents", label: "Contents", icon: "folder", items: [
@@ -96,13 +96,22 @@ const NAV: any[] = [
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
+const TAB_TITLES: Record<string, string> = {
+  analytics: "Analytics",
+  revenue: "Revenue",
+  transactions: "Transactions",
+  location: "Location Analytics",
+  artists: "Artists & Singers",
+  withdrawals: "Withdrawals",
+};
+
 export default function AdminDashboard() {
   const router = useRouter();
   const { isAdmin, isGuest, loading: authLoading, user, logout } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [albums, setAlbums] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"overview" | "content" | "users" | "artists" | "withdrawals">("overview");
+  const [tab, setTab] = useState<"overview" | "content" | "users" | "artists" | "withdrawals" | "analytics" | "revenue" | "transactions" | "location">("overview");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ reports: true });
   const [toast, setToast] = useState("");
@@ -116,6 +125,11 @@ export default function AdminDashboard() {
   const [liveListeners, setLiveListeners] = useState<any>(null);
   const [artistsList, setArtistsList] = useState<any[]>([]);
   const [withdrawalsList, setWithdrawalsList] = useState<any[]>([]);
+  const [enhanced, setEnhanced] = useState<any>(null);
+  const [revenue, setRevenue] = useState<any>(null);
+  const [txns, setTxns] = useState<any>(null);
+  const [location, setLocation] = useState<any>(null);
+  const [txStatus, setTxStatus] = useState("all");
   const pollRef = useRef<any>(null);
 
   // add forms
@@ -160,6 +174,15 @@ export default function AdminDashboard() {
     }, 15000);
     return () => clearInterval(pollRef.current);
   }, [isAdmin, load]);
+
+  // lazy-load heavier analytics screens on demand
+  useEffect(() => {
+    if (!isAdmin) return;
+    if (tab === "analytics" && !enhanced) adminApi.enhanced().then(setEnhanced).catch(() => {});
+    if (tab === "revenue" && !revenue) adminApi.revenueOverview().then(setRevenue).catch(() => {});
+    if (tab === "location" && !location) adminApi.locationOverview().then(setLocation).catch(() => {});
+    if (tab === "transactions") adminApi.transactions(txStatus).then(setTxns).catch(() => {});
+  }, [tab, txStatus, isAdmin, enhanced, revenue, location]);
 
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(""), 2200); };
 
@@ -238,15 +261,23 @@ export default function AdminDashboard() {
         </Pressable>
       </View>
 
-      <View style={styles.segment}>
-        {(["overview", "content", "users"] as const).map((t) => (
-          <Pressable key={t} testID={`admin-tab-${t}`} style={[styles.segBtn, tab === t && styles.segActive]} onPress={() => setTab(t)}>
-            <Text style={[styles.segText, tab === t && styles.segTextActive]}>
-              {t === "overview" ? "Dashboard" : t === "content" ? "Content" : "Users"}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      {(tab === "overview" || tab === "content" || tab === "users") ? (
+        <View style={styles.segment}>
+          {(["overview", "content", "users"] as const).map((t) => (
+            <Pressable key={t} testID={`admin-tab-${t}`} style={[styles.segBtn, tab === t && styles.segActive]} onPress={() => setTab(t)}>
+              <Text style={[styles.segText, tab === t && styles.segTextActive]}>
+                {t === "overview" ? "Dashboard" : t === "content" ? "Content" : "Users"}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        <Pressable testID="admin-breadcrumb-back" style={styles.crumb} onPress={() => setTab("overview")}>
+          <Ionicons name="chevron-back" size={16} color={C.violet} />
+          <Text style={styles.crumbText}>Dashboard</Text>
+          <Text style={styles.crumbCur}>  ›  {TAB_TITLES[tab] || tab}</Text>
+        </Pressable>
+      )}
 
       {loading ? (
         <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} />
@@ -364,6 +395,176 @@ export default function AdminDashboard() {
                 </View>
               ))}
             </>
+          ) : null}
+
+          {tab === "analytics" ? (
+            !enhanced ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
+              <View>
+                <Text style={styles.pageTitle}>Analytics</Text>
+                <Text style={styles.pageSub}>Streaming performance & engagement</Text>
+                <View style={styles.statGrid}>
+                  {[
+                    { l: "Total Streams", v: enhanced.overview.total_streams, s: `${enhanced.overview.revenue_streams} revenue-eligible`, c: C.violet, i: "play" },
+                    { l: "Unique Listeners", v: enhanced.overview.unique_listeners, s: "", c: C.blue, i: "people" },
+                    { l: "Total Hours", v: enhanced.overview.total_listening_hours, s: `${enhanced.overview.avg_session_duration} min avg`, c: C.emerald, i: "time" },
+                    { l: "Gross Revenue", v: `TZS ${Number(enhanced.overview.gross_revenue).toLocaleString()}`, s: "", c: C.amber, i: "cash" },
+                    { l: "Platform Revenue", v: `TZS ${Number(enhanced.overview.platform_revenue).toLocaleString()}`, s: "", c: C.pink, i: "trending-up" },
+                    { l: "Songs Played", v: enhanced.overview.unique_songs_played, s: "", c: C.blue, i: "headset" },
+                  ].map((s, i) => (
+                    <View key={i} style={styles.statCard}>
+                      <View style={[styles.statIcon, { backgroundColor: s.c + "22" }]}><Ionicons name={s.i as any} size={20} color={s.c} /></View>
+                      <Text style={styles.statValue} numberOfLines={1}>{s.v}</Text>
+                      <Text style={styles.statLabel}>{s.l}</Text>
+                      {s.s ? <Text style={styles.statSub}>{s.s}</Text> : null}
+                    </View>
+                  ))}
+                </View>
+                <ChartCard icon="play" iconColor={C.amber} title="Top Songs">
+                  {enhanced.top_songs?.length ? enhanced.top_songs.map((t: any, i: number) => (
+                    <View key={i} style={styles.rankRow}>
+                      <Text style={styles.locRank}>{i + 1}.</Text>
+                      <Text style={styles.locName} numberOfLines={1}>{t.title}</Text>
+                      <Text style={styles.locVal}>{Number(t.plays).toLocaleString()} ▶</Text>
+                    </View>
+                  )) : <Empty />}
+                </ChartCard>
+                <ChartCard icon="musical-notes" iconColor={C.pink} title="Category Distribution">
+                  {enhanced.category_breakdown?.length ? (
+                    <>
+                      <View style={{ alignItems: "center", marginVertical: SP.sm }}>
+                        <PieChart donut innerRadius={50} radius={85} innerCircleColor={C.card}
+                          data={enhanced.category_breakdown.map((d: any, i: number) => ({ value: d.value, color: PIE_COLORS[i % PIE_COLORS.length] }))} />
+                      </View>
+                      <Legend items={enhanced.category_breakdown.map((d: any, i: number) => ({ c: PIE_COLORS[i % PIE_COLORS.length], t: d.name }))} />
+                    </>
+                  ) : <Empty />}
+                </ChartCard>
+              </View>
+            )
+          ) : null}
+
+          {tab === "revenue" ? (
+            !revenue ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
+              <View>
+                <Text style={styles.pageTitle}>Revenue & Performance</Text>
+                <Text style={styles.pageSub}>Earnings, payouts & top performers</Text>
+                <View style={styles.statGrid}>
+                  {[
+                    { l: "Listening Hours", v: revenue.total_listening_hours, c: C.violet, i: "time" },
+                    { l: "Gross Revenue", v: `TZS ${Number(revenue.gross_revenue).toLocaleString()}`, c: C.emerald, i: "cash" },
+                    { l: "Platform Earnings", v: `TZS ${Number(revenue.platform_earnings).toLocaleString()}`, c: C.amber, i: "trending-up" },
+                    { l: "Artist Payouts", v: `TZS ${Number(revenue.artist_payouts).toLocaleString()}`, c: C.pink, i: "wallet" },
+                  ].map((s, i) => (
+                    <View key={i} style={styles.statCard}>
+                      <View style={[styles.statIcon, { backgroundColor: s.c + "22" }]}><Ionicons name={s.i as any} size={20} color={s.c} /></View>
+                      <Text style={styles.statValue} numberOfLines={1}>{s.v}</Text>
+                      <Text style={styles.statLabel}>{s.l}</Text>
+                    </View>
+                  ))}
+                </View>
+                <ChartCard icon="cash" iconColor={C.emerald} title="Revenue Over Time" desc="Last 14 days">
+                  {revenue.daily?.some((d: any) => d.amount > 0) ? (
+                    <LineChart areaChart curved
+                      data={revenue.daily.map((d: any) => ({ value: d.amount, label: d.date }))}
+                      color={C.emerald} startFillColor={C.emerald} endFillColor={C.emerald} startOpacity={0.3} endOpacity={0.02}
+                      thickness={2} hideDataPoints hideRules yAxisColor={C.border} xAxisColor={C.border}
+                      yAxisTextStyle={styles.axis} xAxisLabelTextStyle={styles.axis}
+                      width={CHART_W - 40} height={170} noOfSections={4} initialSpacing={8} backgroundColor="transparent" />
+                  ) : <Empty />}
+                </ChartCard>
+                <ChartCard icon="mic" iconColor={C.violet} title="Top Artists">
+                  {revenue.top_artists?.length ? revenue.top_artists.map((a: any, i: number) => (
+                    <View key={i} style={styles.rankRow}>
+                      <Text style={styles.locRank}>{i + 1}.</Text>
+                      <Text style={styles.locName} numberOfLines={1}>{a.name}</Text>
+                      <Text style={styles.locVal}>TZS {Number(a.gross).toLocaleString()}</Text>
+                    </View>
+                  )) : <Text style={styles.emptyText}>No artist revenue data available</Text>}
+                </ChartCard>
+                <ChartCard icon="albums" iconColor={C.amber} title="Top Albums">
+                  {revenue.top_albums?.length ? revenue.top_albums.map((a: any, i: number) => (
+                    <View key={i} style={styles.rankRow}>
+                      <Text style={styles.locRank}>{i + 1}.</Text>
+                      <Text style={styles.locName} numberOfLines={1}>{a.title}</Text>
+                      <Text style={styles.locVal}>{Number(a.plays).toLocaleString()} ▶</Text>
+                    </View>
+                  )) : <Empty />}
+                </ChartCard>
+              </View>
+            )
+          ) : null}
+
+          {tab === "transactions" ? (
+            <View>
+              <Text style={styles.pageTitle}>Transactions</Text>
+              <Text style={styles.pageSub}>Monitor and manage payment transactions</Text>
+              {txns ? (
+                <>
+                  <View style={styles.secGrid}>
+                    <View style={styles.secCard}><Text style={styles.secLabel}>Total Transactions</Text><Text style={styles.secValue}>{txns.summary.total}</Text></View>
+                    <View style={styles.secCard}><Text style={styles.secLabel}>Completed Revenue</Text><Text style={styles.secValue}>TZS {Number(txns.summary.completed_revenue).toLocaleString()}</Text></View>
+                    <View style={styles.secCard}><Text style={styles.secLabel}>Pending</Text><Text style={styles.secValue}>{txns.summary.pending}</Text></View>
+                    <View style={styles.secCard}><Text style={styles.secLabel}>Failed</Text><Text style={styles.secValue}>{txns.summary.failed}</Text></View>
+                  </View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: SP.sm }}>
+                    {["all", "completed", "pending", "failed"].map((s) => (
+                      <Pressable key={s} testID={`tx-filter-${s}`} style={[styles.filterChip, txStatus === s && styles.filterChipActive]} onPress={() => setTxStatus(s)}>
+                        <Text style={[styles.filterChipText, txStatus === s && { color: "#fff" }]}>{s}</Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                  {txns.transactions.length === 0 ? <Text style={styles.emptyText}>No transactions</Text> : null}
+                  {txns.transactions.map((t: any, i: number) => (
+                    <View key={i} style={styles.txRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.topTitle}>TZS {Number(t.amount).toLocaleString()} · {t.plan_id}</Text>
+                        <Text style={styles.topSub} numberOfLines={1}>{t.phone || t.user_id} · {t.gateway} · {(t.created_at || "").slice(0, 10)}</Text>
+                      </View>
+                      <Text style={[styles.statusTag, { color: statusColor(t.status), borderColor: statusColor(t.status) }]}>{t.status}</Text>
+                    </View>
+                  ))}
+                </>
+              ) : <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} />}
+            </View>
+          ) : null}
+
+          {tab === "location" ? (
+            !location ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
+              <View>
+                <Text style={styles.pageTitle}>Location Analytics</Text>
+                <Text style={styles.pageSub}>Distribution of users across countries</Text>
+                <View style={styles.secGrid}>
+                  <View style={styles.secCard}><Text style={styles.secLabel}>Total Users</Text><Text style={styles.secValue}>{location.total_users}</Text></View>
+                  <View style={styles.secCard}><Text style={styles.secLabel}>Countries</Text><Text style={styles.secValue}>{location.total_countries}</Text></View>
+                </View>
+                <ChartCard icon="location" iconColor={C.emerald} title="Users by Country">
+                  {location.countries?.length ? location.countries.map((c: any, i: number) => {
+                    const pct = Math.min(100, (c.value / (location.total_users || 1)) * 100);
+                    return (
+                      <View key={i} style={styles.locRow}>
+                        <Text style={styles.locRank}>{i + 1}.</Text>
+                        <Text style={styles.locName} numberOfLines={1}>{c.name}</Text>
+                        <View style={styles.locBarTrack}><View style={[styles.locBarFill, { width: `${pct}%` }]} /></View>
+                        <Text style={styles.locVal}>{c.value}</Text>
+                      </View>
+                    );
+                  }) : <Empty />}
+                </ChartCard>
+                <ChartCard icon="trending-up" iconColor={C.violet} title="User Growth" desc="Daily new users and cumulative growth">
+                  {location.growth?.length ? (
+                    <LineChart areaChart curved
+                      data={location.growth.map((d: any) => ({ value: d.cumulative, label: d.month }))}
+                      data2={location.growth.map((d: any) => ({ value: d.new }))}
+                      color1={C.violet} color2={C.emerald}
+                      startFillColor1={C.violet} endFillColor1={C.violet} startOpacity={0.3} endOpacity={0.02}
+                      thickness={2} hideDataPoints hideRules yAxisColor={C.border} xAxisColor={C.border}
+                      yAxisTextStyle={styles.axis} xAxisLabelTextStyle={styles.axis}
+                      width={CHART_W - 40} height={170} noOfSections={4} initialSpacing={8} backgroundColor="transparent" />
+                  ) : <Empty />}
+                  <Legend items={[{ c: C.violet, t: "Cumulative" }, { c: C.emerald, t: "New" }]} />
+                </ChartCard>
+              </View>
+            )
           ) : null}
         </ScrollView>
       )}
@@ -793,6 +994,9 @@ const styles = StyleSheet.create({
   segActive: { backgroundColor: C.violet },
   segText: { color: C.sub, fontWeight: "700", fontSize: 12 },
   segTextActive: { color: "#fff" },
+  crumb: { flexDirection: "row", alignItems: "center", marginHorizontal: SP.md, paddingVertical: SP.sm },
+  crumbText: { color: C.violet, fontWeight: "700", fontSize: 13 },
+  crumbCur: { color: C.sub, fontWeight: "700", fontSize: 13 },
 
   pageTitle: { color: C.text, fontSize: 24, fontWeight: "800" },
   pageSub: { color: C.muted, fontSize: 12, marginTop: 2, marginBottom: SP.md },
@@ -838,6 +1042,11 @@ const styles = StyleSheet.create({
   demoTitle: { color: C.text, fontSize: 18, fontWeight: "800", marginLeft: 8 },
 
   locRow: { flexDirection: "row", alignItems: "center", paddingVertical: 5 },
+  rankRow: { flexDirection: "row", alignItems: "center", paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: "rgba(39,39,42,0.5)" },
+  filterChip: { paddingHorizontal: SP.md, height: 34, borderRadius: 9999, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center", marginRight: SP.sm },
+  filterChipActive: { backgroundColor: C.violet, borderColor: C.violet },
+  filterChipText: { color: C.sub, fontWeight: "700", fontSize: 12, textTransform: "capitalize" },
+  txRow: { flexDirection: "row", alignItems: "center", backgroundColor: C.cardAlt, borderRadius: 10, padding: SP.md, marginBottom: SP.sm, borderWidth: 1, borderColor: C.border },
   locRank: { width: 20, color: C.muted, fontSize: 11 },
   locName: { flex: 1, color: C.sub, fontSize: 13 },
   locBarTrack: { width: 64, height: 6, borderRadius: 3, backgroundColor: C.border, overflow: "hidden", marginHorizontal: 8 },
