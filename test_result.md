@@ -112,3 +112,18 @@
 - Rewrote /app/frontend/app/admin/index.tsx — faithful RN port of Gracefy Dashboard (zinc/violet theme): live banner, downloads banner, 4 primary stat cards, 4 secondary stats, 4 charts (Customer Growth area, Donations area, Content bar, Category pie) + demographics (device/gender/age/location). Uses react-native-gifted-charts. English labels. Content & Users tabs preserved.
 - Fixed drawer testID spacing (kebab-case).
 - profile.tsx — added "Futa Akaunti" (Delete Account) button + confirmation modal (testIDs: profile-delete-account, delete-account-modal, delete-account-confirm, delete-account-cancel).
+
+## Session 9 (Aug 14, 2026) — Artist Portal + Gracefy Sidebar Redesign
+### Backend (routers/artists.py — separate `artists` collection, JWT typ:artist)
+- POST /api/artists/register (pending status), /login (403 until approved), GET/PUT /me
+- Albums/songs: POST /api/artists/albums, /songs (status pending), GET /albums, /songs
+- POST /api/artists/upload-audio (multipart → Emergent Object Storage), GET /api/artists/media/{path} (public playback)
+- Earnings (simulated 50 TZS/play): GET /api/artists/earnings; Withdrawals: GET/POST /api/artists/withdrawals
+- Admin mgmt (require_admin): GET /api/artists/admin/all, POST /api/artists/admin/{id}/status, GET /api/artists/admin/withdrawals/all, POST /api/artists/admin/withdrawals/{id}/status
+- Seed: demo approved artist artist@vibe.app / Artist@2026
+### Frontend
+- Admin sidebar rebuilt as faithful accordion (groups collapse, Artists & Singers + Withdrawals wired to admin tabs, footer with logout) — matches user's Gracefy screenshot
+- Admin new tabs: "artists" (approve/reject/suspend) and "withdrawals" (approve/mark paid/reject)
+- Artist portal screens: /artist/login, /artist/register, /artist (dashboard: overview earnings, music upload, withdrawals, profile)
+- Entry point on Profile: "Artist Portal" (profile-artist)
+- Uses expo-document-picker for audio; platform-aware multipart upload

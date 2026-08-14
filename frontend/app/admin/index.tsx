@@ -9,6 +9,7 @@ import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { LineChart, BarChart, PieChart } from "react-native-gifted-charts";
 import { adminApi, musicApi } from "@/src/services/api";
+import { adminArtistApi } from "@/src/services/artistApi";
 import { useAuth } from "@/src/context/AuthContext";
 
 // Gracefy admin palette (zinc / violet) — faithful to the original web dashboard
@@ -32,42 +33,78 @@ const GENDER_COLORS = ["#3b82f6", "#ec4899", "#8b5cf6", "#6b7280"];
 const SP = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 };
 const CHART_W = Dimensions.get("window").width - 2 * SP.md - 2 * SP.md;
 
-const MENU = [
-  { group: "Reports & Analytics", items: [
+// Faithful port of Gracefy's admin sidebar navigation tree (App.js).
+// `tab` maps to a functional screen; items without `tab` show a "coming soon" toast.
+const NAV: any[] = [
+  { type: "group", key: "reports", label: "Reports & Analytics", icon: "trending-up", items: [
     { label: "Dashboard", icon: "grid", tab: "overview" },
-    { label: "Analytics", icon: "stats-chart", tab: "overview" },
-    { label: "Revenue", icon: "cash", tab: "overview" },
-    { label: "Transactions", icon: "receipt", tab: "overview" },
+    { label: "Analytics", icon: "pulse" },
+    { label: "Location Analytics", icon: "location" },
+    { label: "Revenue", icon: "cash" },
+    { label: "Transactions", icon: "receipt" },
+    { label: "Withdrawals", icon: "card", tab: "withdrawals" },
   ]},
-  { group: "Contents", items: [
-    { label: "Songs & Albums", icon: "musical-notes", tab: "content" },
-    { label: "Live Radio", icon: "radio" },
-    { label: "Neno la Leo", icon: "sunny" },
-    { label: "Bible", icon: "book" },
+  { type: "group", key: "contents", label: "Contents", icon: "folder", items: [
+    { label: "Albums & Songs", icon: "musical-notes", tab: "content" },
+    { label: "Mafundisho", icon: "book" },
+    { label: "Neno la Leo", icon: "bookmark" },
+    { label: "Biblia na Vitabu", icon: "book-outline" },
+    { label: "Special Mixes", icon: "disc" },
+    { label: "Song Categories", icon: "pricetags" },
   ]},
-  { group: "Control & Management", items: [
-    { label: "App Users", icon: "people", tab: "users" },
-    { label: "Admin Users", icon: "shield-checkmark", tab: "users" },
-    { label: "Churches", icon: "business" },
-    { label: "Religious Leaders", icon: "person" },
-    { label: "Choir & Singers", icon: "mic" },
-    { label: "Donations", icon: "heart" },
-    { label: "Subscriptions", icon: "pricetags" },
+  { type: "group", key: "control", label: "Control & Management", icon: "shield", items: [
+    { label: "Role Management", icon: "shield-half" },
+    { label: "Approvals", icon: "checkmark-circle" },
+    { label: "Layout Management", icon: "grid-outline" },
+    { label: "CDN Management", icon: "cloud" },
+    { label: "HLS Streaming", icon: "radio" },
+    { label: "App Health Monitoring", icon: "phone-portrait" },
   ]},
-  { group: "System", items: [
-    { label: "Settings", icon: "settings" },
-    { label: "Feedback", icon: "chatbubbles" },
+  { type: "group", key: "settings", label: "Settings", icon: "settings", items: [
+    { label: "System Settings", icon: "globe" },
+    { label: "App Settings", icon: "settings-outline" },
+    { label: "Branding", icon: "color-palette" },
+    { label: "Legal & Compliance", icon: "document-text" },
+    { label: "Monetization", icon: "card" },
+    { label: "Auth Settings", icon: "lock-closed" },
+    { label: "Security", icon: "lock-closed-outline" },
   ]},
+  { type: "item", label: "Advertising & Campaigns", icon: "megaphone" },
+  { type: "item", label: "Feedback Manager", icon: "chatbubble-ellipses" },
+  { type: "item", label: "Chat & Support", icon: "headset" },
+  { type: "item", label: "Knowledge Bank", icon: "bulb" },
+  { type: "item", label: "Recommendations", icon: "sparkles" },
+  { type: "item", label: "Geo Content", icon: "globe" },
+  { type: "group", key: "choir", label: "Artists & Singers", icon: "people-circle", items: [
+    { label: "Artists", icon: "mic", tab: "artists" },
+    { label: "Artist Management", icon: "people", tab: "artists" },
+    { label: "Artist Accounts", icon: "wallet", tab: "withdrawals" },
+  ]},
+  { type: "group", key: "leaders", label: "Religious Leaders", icon: "book", items: [
+    { label: "Leader Management", icon: "people" },
+  ]},
+  { type: "item", label: "App Users", icon: "people", tab: "users" },
+  { type: "item", label: "Admin Users", icon: "shield-checkmark" },
+  { type: "item", label: "Churches", icon: "business" },
+  { type: "item", label: "Live Seminars", icon: "videocam" },
+  { type: "item", label: "Live Radio", icon: "radio" },
+  { type: "item", label: "Audio Rooms", icon: "mic-circle" },
+  { type: "item", label: "Donations", icon: "heart" },
+  { type: "item", label: "Community", icon: "chatbubbles" },
+  { type: "item", label: "Bookings", icon: "calendar" },
 ];
+
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { isAdmin, isGuest, loading: authLoading } = useAuth();
+  const { isAdmin, isGuest, loading: authLoading, user, logout } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [albums, setAlbums] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"overview" | "content" | "users">("overview");
+  const [tab, setTab] = useState<"overview" | "content" | "users" | "artists" | "withdrawals">("overview");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({ reports: true });
   const [toast, setToast] = useState("");
 
   // dashboard analytics
@@ -77,6 +114,8 @@ export default function AdminDashboard() {
   const [realtime, setRealtime] = useState<any>(null);
   const [downloadStats, setDownloadStats] = useState<any>(null);
   const [liveListeners, setLiveListeners] = useState<any>(null);
+  const [artistsList, setArtistsList] = useState<any[]>([]);
+  const [withdrawalsList, setWithdrawalsList] = useState<any[]>([]);
   const pollRef = useRef<any>(null);
 
   // add forms
@@ -87,7 +126,7 @@ export default function AdminDashboard() {
 
   const load = useCallback(async () => {
     try {
-      const [u, a, ov, tr, dm, rt, dl, ll] = await Promise.all([
+      const [u, a, ov, tr, dm, rt, dl, ll, arts, wds] = await Promise.all([
         adminApi.users().catch(() => []),
         musicApi.albums().catch(() => []),
         adminApi.overview().catch(() => null),
@@ -96,10 +135,13 @@ export default function AdminDashboard() {
         adminApi.realtime().catch(() => null),
         adminApi.downloadStats().catch(() => null),
         adminApi.liveListeners().catch(() => null),
+        adminArtistApi.list().catch(() => []),
+        adminArtistApi.withdrawals().catch(() => []),
       ]);
       setUsers(u); setAlbums(a);
       setOverview(ov); setTrends(tr); setDemographics(dm);
       setRealtime(rt); setDownloadStats(dl); setLiveListeners(ll);
+      setArtistsList(arts); setWithdrawalsList(wds);
     } catch {}
     setLoading(false);
   }, []);
@@ -121,6 +163,12 @@ export default function AdminDashboard() {
 
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(""), 2200); };
 
+  const onNavPress = (node: any) => {
+    setDrawerOpen(false);
+    if (node.tab) setTab(node.tab);
+    else flash(`${node.label}: Inakuja hivi karibuni`);
+  };
+
   const createAlbum = async () => {
     if (!albForm.title || !albForm.artist_name) return;
     try {
@@ -138,6 +186,23 @@ export default function AdminDashboard() {
       flash("Wimbo umeongezwa"); load();
     } catch (e: any) { flash(e.message); }
   };
+
+  const setArtistStatus = async (id: string, s: string) => {    try {
+      await adminArtistApi.setStatus(id, s);
+      setArtistsList((list) => list.map((a) => (a.artist_id === id ? { ...a, status: s } : a)));
+      flash(`Artist ${s}`);
+    } catch (e: any) { flash(e.message); }
+  };
+
+  const setWithdrawalStatus = async (id: string, s: string) => {
+    try {
+      await adminArtistApi.setWithdrawalStatus(id, s);
+      setWithdrawalsList((list) => list.map((w) => (w.withdrawal_id === id ? { ...w, status: s } : w)));
+      flash(`Withdrawal ${s}`);
+    } catch (e: any) { flash(e.message); }
+  };
+
+  const statusColor = (s: string) => s === "approved" || s === "paid" ? C.emerald : s === "rejected" || s === "suspended" ? C.red : C.amber;
 
   if (authLoading) return <View style={styles.center}><ActivityIndicator color={C.violet} size="large" /></View>;
 
@@ -236,45 +301,137 @@ export default function AdminDashboard() {
               ))}
             </>
           ) : null}
+
+          {tab === "artists" ? (
+            <>
+              <Text style={styles.sectionTitle}>Artists & Singers ({artistsList.length})</Text>
+              {artistsList.length === 0 ? <Text style={styles.topSub}>No artists yet.</Text> : null}
+              {artistsList.map((a) => (
+                <View key={a.artist_id} style={styles.artCard}>
+                  <View style={styles.artHead}>
+                    <View style={styles.userAvatar}><Ionicons name="mic" size={16} color="#fff" /></View>
+                    <View style={{ flex: 1, marginLeft: SP.sm }}>
+                      <Text style={styles.topTitle} numberOfLines={1}>{a.name}</Text>
+                      <Text style={styles.topSub} numberOfLines={1}>{a.email} · {a.songs_count || 0} songs</Text>
+                    </View>
+                    <Text style={[styles.statusTag, { color: statusColor(a.status), borderColor: statusColor(a.status) }]}>{a.status}</Text>
+                  </View>
+                  <View style={styles.artActions}>
+                    {a.status !== "approved" ? (
+                      <Pressable testID={`artist-approve-${a.artist_id}`} style={[styles.miniBtn, { backgroundColor: C.emerald }]} onPress={() => setArtistStatus(a.artist_id, "approved")}>
+                        <Text style={styles.miniBtnText}>Approve</Text>
+                      </Pressable>
+                    ) : (
+                      <Pressable testID={`artist-suspend-${a.artist_id}`} style={[styles.miniBtn, { backgroundColor: C.amber }]} onPress={() => setArtistStatus(a.artist_id, "suspended")}>
+                        <Text style={styles.miniBtnText}>Suspend</Text>
+                      </Pressable>
+                    )}
+                    <Pressable testID={`artist-reject-${a.artist_id}`} style={[styles.miniBtn, { backgroundColor: C.red }]} onPress={() => setArtistStatus(a.artist_id, "rejected")}>
+                      <Text style={styles.miniBtnText}>Reject</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </>
+          ) : null}
+
+          {tab === "withdrawals" ? (
+            <>
+              <Text style={styles.sectionTitle}>Withdrawal Requests ({withdrawalsList.length})</Text>
+              {withdrawalsList.length === 0 ? <Text style={styles.topSub}>No withdrawal requests yet.</Text> : null}
+              {withdrawalsList.map((w) => (
+                <View key={w.withdrawal_id} style={styles.artCard}>
+                  <View style={styles.artHead}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.topTitle}>{w.currency} {Number(w.amount).toLocaleString()}</Text>
+                      <Text style={styles.topSub} numberOfLines={1}>{w.artist_name} · {w.method} · {w.details || "-"}</Text>
+                    </View>
+                    <Text style={[styles.statusTag, { color: statusColor(w.status), borderColor: statusColor(w.status) }]}>{w.status}</Text>
+                  </View>
+                  {w.status === "pending" ? (
+                    <View style={styles.artActions}>
+                      <Pressable testID={`wd-approve-${w.withdrawal_id}`} style={[styles.miniBtn, { backgroundColor: C.blue }]} onPress={() => setWithdrawalStatus(w.withdrawal_id, "approved")}>
+                        <Text style={styles.miniBtnText}>Approve</Text>
+                      </Pressable>
+                      <Pressable testID={`wd-paid-${w.withdrawal_id}`} style={[styles.miniBtn, { backgroundColor: C.emerald }]} onPress={() => setWithdrawalStatus(w.withdrawal_id, "paid")}>
+                        <Text style={styles.miniBtnText}>Mark Paid</Text>
+                      </Pressable>
+                      <Pressable testID={`wd-reject-${w.withdrawal_id}`} style={[styles.miniBtn, { backgroundColor: C.red }]} onPress={() => setWithdrawalStatus(w.withdrawal_id, "rejected")}>
+                        <Text style={styles.miniBtnText}>Reject</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
+              ))}
+            </>
+          ) : null}
         </ScrollView>
       )}
 
       {toast ? <View style={styles.toast}><Text style={styles.toastText}>{toast}</Text></View> : null}
 
-      {/* Side drawer navigation */}
+      {/* Side drawer navigation — faithful accordion sidebar */}
       <Modal transparent visible={drawerOpen} animationType="slide" onRequestClose={() => setDrawerOpen(false)}>
         <Pressable style={styles.drawerOverlay} onPress={() => setDrawerOpen(false)}>
           <Pressable style={styles.drawer} onPress={(e) => e.stopPropagation()}>
             <View style={styles.drawerHead}>
-              <Ionicons name="musical-notes" size={20} color={C.violet} />
-              <Text style={styles.drawerTitle}>Admin Dashboard</Text>
+              <View style={styles.brandBadge}>
+                <Ionicons name="musical-notes" size={16} color="#fff" />
+              </View>
+              <View style={{ flex: 1, marginLeft: SP.sm }}>
+                <Text style={styles.brandName}>Vibe</Text>
+                <Text style={styles.brandSub}>Admin Dashboard</Text>
+              </View>
               <Pressable testID="drawer-close" onPress={() => setDrawerOpen(false)} hitSlop={10}>
                 <Ionicons name="close" size={22} color={C.text} />
               </Pressable>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {MENU.map((grp) => (
-                <View key={grp.group} style={{ marginBottom: SP.md }}>
-                  <Text style={styles.drawerGroup}>{grp.group}</Text>
-                  {grp.items.map((it) => (
+
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: SP.md }}>
+              {NAV.map((node, ni) => {
+                if (node.type === "item") {
+                  const active = node.tab && node.tab === tab;
+                  return (
+                    <NavRow key={node.label} node={node} active={!!active} indent={false}
+                      onPress={() => onNavPress(node)} />
+                  );
+                }
+                // group
+                const isOpen = !!expanded[node.key];
+                const hasActive = node.items.some((c: any) => c.tab && c.tab === tab);
+                return (
+                  <View key={node.key} style={{ marginBottom: 2 }}>
                     <Pressable
-                      key={it.label}
-                      testID={`menu-${(it.tab || it.label).toLowerCase().replace(/\s+/g, "-")}`}
-                      style={styles.drawerItem}
-                      onPress={() => {
-                        setDrawerOpen(false);
-                        if (it.tab) setTab(it.tab as any);
-                        else flash(`${it.label}: Inakuja hivi karibuni`);
-                      }}
+                      testID={`nav-group-${node.key}`}
+                      style={[styles.groupHead, (isOpen || hasActive) && styles.groupHeadActive]}
+                      onPress={() => setExpanded((e) => ({ ...e, [node.key]: !e[node.key] }))}
                     >
-                      <Ionicons name={it.icon as any} size={18} color={it.tab === tab ? C.violet : C.sub} />
-                      <Text style={[styles.drawerLabel, it.tab === tab && { color: C.violet, fontWeight: "800" }]}>{it.label}</Text>
+                      <Ionicons name={node.icon as any} size={18} color={isOpen || hasActive ? C.violet : C.sub} />
+                      <Text style={[styles.groupLabel, (isOpen || hasActive) && { color: C.violet }]}>{node.label}</Text>
+                      <Ionicons name={isOpen ? "chevron-up" : "chevron-down"} size={16} color={isOpen || hasActive ? C.violet : C.muted} />
                     </Pressable>
-                  ))}
-                </View>
-              ))}
-              <View style={{ height: 40 }} />
+                    {isOpen ? node.items.map((c: any) => (
+                      <NavRow key={c.label} node={c} active={!!(c.tab && c.tab === tab)} indent
+                        onPress={() => onNavPress(c)} />
+                    )) : null}
+                  </View>
+                );
+              })}
             </ScrollView>
+
+            {/* Footer: admin identity + logout */}
+            <View style={styles.drawerFooter}>
+              <View style={styles.footerAvatar}>
+                <Text style={styles.footerAvatarText}>{(user?.name || user?.email || "A").charAt(0).toUpperCase()}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.footerName} numberOfLines={1}>{user?.name || "Vibe Admin"}</Text>
+                <Text style={styles.footerEmail} numberOfLines={1}>{user?.email || "admin@vibe.app"}</Text>
+              </View>
+              <Pressable testID="drawer-logout" hitSlop={10} onPress={async () => { setDrawerOpen(false); await logout(); router.replace("/(tabs)"); }}>
+                <Ionicons name="log-out-outline" size={22} color={C.sub} />
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -573,6 +730,19 @@ function DemoPie({ data, colorsByName, genderColors }: any) {
 
 const Empty = () => <Text style={styles.emptyText}>No data yet</Text>;
 
+function NavRow({ node, active, indent, onPress }: any) {
+  return (
+    <Pressable
+      testID={`nav-${slug(node.label)}`}
+      style={[styles.navRow, indent && styles.navIndent, active && styles.navRowActive]}
+      onPress={onPress}
+    >
+      <Ionicons name={node.icon as any} size={indent ? 16 : 18} color={active ? C.violet : C.sub} />
+      <Text style={[styles.navLabel, active && { color: C.violet, fontWeight: "700" }]} numberOfLines={1}>{node.label}</Text>
+    </Pressable>
+  );
+}
+
 function FormModal({ visible, title, fields, onClose, onSave, testID }: any) {
   return (
     <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -685,17 +855,34 @@ const styles = StyleSheet.create({
   contentRow: { flexDirection: "row", alignItems: "center", paddingVertical: SP.sm, borderBottomWidth: 1, borderBottomColor: C.border },
   userAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: C.violet, alignItems: "center", justifyContent: "center" },
   roleBadge: { color: C.amber, fontSize: 10, fontWeight: "800", marginLeft: SP.sm, textTransform: "uppercase" },
+  artCard: { backgroundColor: C.cardAlt, borderRadius: 12, padding: SP.md, marginBottom: SP.sm, borderWidth: 1, borderColor: C.border },
+  artHead: { flexDirection: "row", alignItems: "center" },
+  statusTag: { fontSize: 10, fontWeight: "800", textTransform: "uppercase", borderWidth: 1, borderRadius: 9999, paddingHorizontal: 8, paddingVertical: 2 },
+  artActions: { flexDirection: "row", gap: SP.sm, marginTop: SP.sm },
+  miniBtn: { flex: 1, height: 36, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  miniBtnText: { color: "#fff", fontWeight: "800", fontSize: 12 },
 
   toast: { position: "absolute", bottom: 40, left: SP.lg, right: SP.lg, backgroundColor: C.card, borderRadius: 8, padding: SP.md, borderWidth: 1, borderColor: C.border },
   toastText: { color: C.text, textAlign: "center", fontWeight: "600" },
 
   drawerOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", flexDirection: "row" },
-  drawer: { width: "78%", maxWidth: 320, height: "100%", backgroundColor: C.card, borderRightWidth: 1, borderRightColor: C.border, padding: SP.md, paddingTop: SP.xl },
-  drawerHead: { flexDirection: "row", alignItems: "center", marginBottom: SP.lg },
-  drawerTitle: { flex: 1, color: C.text, fontSize: 16, fontWeight: "800", marginLeft: SP.sm },
-  drawerGroup: { color: C.muted, fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1, marginBottom: SP.xs, marginTop: SP.xs },
-  drawerItem: { flexDirection: "row", alignItems: "center", paddingVertical: SP.sm, paddingLeft: SP.sm },
-  drawerLabel: { color: C.text, fontSize: 14, marginLeft: SP.md, fontWeight: "600" },
+  drawer: { width: "82%", maxWidth: 320, height: "100%", backgroundColor: "#0b0b0d", borderRightWidth: 1, borderRightColor: C.border, paddingTop: SP.xl },
+  drawerHead: { flexDirection: "row", alignItems: "center", paddingHorizontal: SP.md, paddingBottom: SP.md, borderBottomWidth: 1, borderBottomColor: C.border, marginBottom: SP.sm },
+  brandBadge: { width: 34, height: 34, borderRadius: 9, backgroundColor: C.violet, alignItems: "center", justifyContent: "center" },
+  brandName: { color: C.text, fontSize: 16, fontWeight: "800" },
+  brandSub: { color: C.muted, fontSize: 11 },
+  groupHead: { flexDirection: "row", alignItems: "center", paddingVertical: 11, paddingHorizontal: SP.md, marginHorizontal: SP.sm, borderRadius: 8 },
+  groupHeadActive: { backgroundColor: "rgba(139,92,246,0.16)" },
+  groupLabel: { flex: 1, color: C.sub, fontSize: 14, fontWeight: "700", marginLeft: SP.sm },
+  navRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: SP.md, marginHorizontal: SP.sm, borderRadius: 8 },
+  navIndent: { paddingLeft: SP.xl, paddingVertical: 8 },
+  navRowActive: { backgroundColor: "rgba(139,92,246,0.16)" },
+  navLabel: { flex: 1, color: C.sub, fontSize: 13.5, marginLeft: SP.md, fontWeight: "500" },
+  drawerFooter: { flexDirection: "row", alignItems: "center", padding: SP.md, borderTopWidth: 1, borderTopColor: C.border },
+  footerAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: C.violet, alignItems: "center", justifyContent: "center", marginRight: SP.sm },
+  footerAvatarText: { color: "#fff", fontWeight: "800", fontSize: 14 },
+  footerName: { color: C.text, fontSize: 13, fontWeight: "700" },
+  footerEmail: { color: C.muted, fontSize: 11 },
 
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
   sheet: { backgroundColor: C.card, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: SP.lg, paddingBottom: SP.xl },

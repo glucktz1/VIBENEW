@@ -89,6 +89,16 @@ export default function Profile() {
             </Pressable>
           ) : null}
 
+          <Pressable testID="profile-artist" style={[styles.row, styles.artistRow]} onPress={() => router.push("/artist")}>
+            <Ionicons name="mic" size={22} color={COLORS.primaryLight} />
+            <View style={{ flex: 1, marginLeft: SPACING.md }}>
+              <Text style={[styles.rowLabel, { marginLeft: 0, color: COLORS.primaryLight }]}>Artist Portal</Text>
+              <Text style={styles.artistSub}>Wewe ni msanii? Pakia muziki na upate mapato</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+          </Pressable>
+
+
           {!isGuest ? (
             <Pressable testID="profile-logout" style={styles.logout} onPress={async () => { await logout(); router.replace("/(tabs)"); }}>
               <Ionicons name="log-out-outline" size={22} color={COLORS.error} />
@@ -147,6 +157,8 @@ const styles = StyleSheet.create({
   upgradeSub: { color: "#000", fontSize: FONT.sm, opacity: 0.8 },
   row: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.card, borderRadius: RADIUS.md, padding: SPACING.md, marginBottom: SPACING.sm, borderWidth: 1, borderColor: COLORS.border },
   adminRow: { borderColor: COLORS.warning },
+  artistRow: { borderColor: COLORS.primaryLight },
+  artistSub: { color: COLORS.textSecondary, fontSize: FONT.xs, marginTop: 2 },
   rowLabel: { flex: 1, color: COLORS.text, fontSize: FONT.md, fontWeight: "600", marginLeft: SPACING.md },
   logout: { flexDirection: "row", alignItems: "center", justifyContent: "center", padding: SPACING.md, marginTop: SPACING.md },
   logoutText: { color: COLORS.error, fontSize: FONT.md, fontWeight: "700", marginLeft: SPACING.sm },

@@ -1,0 +1,65 @@
+"""Emergent Managed Object Storage helpers (audio uploads for artist portal).
+
+The Expo app never talks to storage directly — it POSTs files to our FastAPI
+routes, which use these helpers. EMERGENT_LLM_KEY lives only in backend/.env.
+"""
+import os
+
+import requests
+
+STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
+STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
+EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
+APP_NAME = "vibe"
+
+_storage_key = None
+
+
+def init_storage():
+    """Call once at startup. Idempotent — returns a reusable storage_key."""
+    global _storage_key
+    if _storage_key:
+        return _storage_key
+    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY}, timeout=30)
+    resp.raise_for_status()
+    _storage_key = resp.json()["storage_key"]
+    return _storage_key
+
+
+def _reset_key():
+    global _storage_key
+    _storage_key = None
+
+
+def put_object(path: str, data: bytes, content_type: str) -> dict:
+    """Upload bytes. Returns {"path","size","etag"}. Retries once on stale key (503)."""
+    key = init_storage()
+    resp = requests.put(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key, "Content-Type": content_type},
+        data=data,
+        timeout=120,
+    )
+    if resp.status_code == 503:
+        _reset_key()
+        key = init_storage()
+        resp = requests.put(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key, "Content-Type": content_type},
+            data=data,
+            timeout=120,
+        )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def get_object(path: str):
+    """Download. Returns (content_bytes, content_type)."""
+    key = init_storage()
+    resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
+    if resp.status_code == 503:
+        _reset_key()
+        key = init_storage()
+        resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")

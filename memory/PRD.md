@@ -23,6 +23,16 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - Recommendation engine: weighted scoring (same_album=100, genre=40, popularity=25, artist=20, recency=15) + diversity fallback (cap consecutive same-artist)
 - Subscription plans: Kwa Siku 500, Kwa Wiki 2000, Kwa Mwezi 5500 TZS (simulated Azam Pay)
 
+## What's Been Implemented — Session 9 (Aug 14, 2026) — Artist Portal + Gracefy Accordion Sidebar
+- ✅ Admin sidebar rebuilt as faithful accordion (from user's Gracefy screenshot): collapsible groups (Reports & Analytics, Contents, Control & Management, Settings), standalone items, Artists & Singers + Religious Leaders groups, footer with admin identity + logout
+- ✅ "Choir" renamed to "Artists" throughout
+- ✅ Artist Portal (separate `artists` collection, JWT typ:artist, pending-approval gate): register → login → dashboard (earnings overview, music upload, withdrawals, profile). Entry via Profile → "Artist Portal"
+- ✅ Real audio uploads via Emergent Managed Object Storage (interim; swap to Bunny CDN when creds provided). Public playback route /api/artists/media/{path}
+- ✅ Simulated earnings (50 TZS/play) + withdrawal request workflow (real payout gateway to be added later)
+- ✅ Admin management: approve/reject/suspend artists + approve/mark-paid/reject withdrawals (admin dashboard "artists" & "withdrawals" tabs)
+- ✅ Seed: demo approved artist artist@vibe.app / Artist@2026
+- ✅ Testing: 20/21 backend pass; full artist portal + admin management + sidebar verified (iteration_13)
+
 ## What's Been Implemented — Session 8 (Aug 14, 2026) — Gracefy Dashboard 1:1 Port + Delete Account
 - ✅ Ported the original Gracefy web Dashboard (Dashboard.jsx) faithfully into React Native (zinc/violet dark theme) — live streaming banner, downloads banner, 4 primary stat cards, 4 secondary stats, 4 charts (Customer Growth area, Donations Trend area, Content Performance bar, Category pie) + User Demographics (device/gender/age/location) using react-native-gifted-charts. English labels (rest of app stays Swahili).
 - ✅ NEW backend router routers/analytics.py — 6 admin-only endpoints matching Dashboard.jsx: /api/analytics/{overview,trends,user-demographics,realtime,download-stats,live-listeners}

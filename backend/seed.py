@@ -96,6 +96,26 @@ async def seed():
     except Exception:
         pass
 
+    # ---- demo artist (approved) for the artist portal ----
+    if not await db.artists.find_one({"email": "artist@vibe.app"}):
+        await db.artists.insert_one({
+            "artist_id": "art_demo0001",
+            "email": "artist@vibe.app",
+            "name": "Zawadi Choir",
+            "password_hash": bcrypt.hashpw(b"Artist@2026", bcrypt.gensalt()).decode(),
+            "phone": "+255700000000",
+            "bio": "Kwaya ya injili kutoka Dar es Salaam.",
+            "genre": "Kwaya",
+            "thumbnail": None,
+            "status": "approved",
+            "total_withdrawn": 0,
+            "created_at": now_utc(),
+        })
+    try:
+        await db.artists.create_index("email", unique=True, name="artist_email_unique")
+    except Exception:
+        pass
+
     if await db.albums.count_documents({}) > 0:
         print("Content already seeded; skipping content seed.")
         return

@@ -1,0 +1,41 @@
+{
+  "summary": "Session 9 (Artist Portal + Object Storage + Admin Sidebar Accordion + Artist/Withdrawal Management). Backend: 20 passed / 1 skipped (test_artists.py). Verified /api/artists/{register,login,me,albums,songs,earnings,withdrawals,upload-audio,media/{path}} and /api/artists/admin/{all,{id}/status,withdrawals/all,withdrawals/{id}/status}. Pending artist login → 403, wrong password → 401, approved login → 200 + token, /me with token → 200 (approved). Album POST returns status=pending scoped to artist; song POST returns 200 for owned album and 404 for unknown album; list endpoints scoped by artist_id (no cross-artist leak). Emergent object storage upload+download round-trip succeeded — bytes returned identical, content-type = audio/mpeg, path prefix vibe/uploads/{artist_id}/. Earnings shape verified (currency=TZS, per_play_rate=50, all keys ints). Withdrawal exceeding available → 400; positive path skipped (demo artist has 0 available balance — expected since play_events aren't seeded for their songs). Admin gating: non-admin bearer + unauth → 401/403, invalid status → 400, unknown withdrawal_id → 404. Password_hash never leaked in admin list. Approving a pending artist then logging in → 200 (end-to-end status change works). Frontend (390x844): /artist/login → login as artist@vibe.app succeeds, dashboard renders header, APPROVED badge, 4 segment tabs (artist-tab-overview/music/withdrawals/profile), earnings card TZS 0 + Omba Malipo button, 4 mini stats (Jumla ya Mapato, Michezo, Yaliyolipwa, Yanayosubiri), per-play note. Music tab: artist-add-album creates album (album-title + album-save flow — a new pending album appeared after creation), artist-add-song opens upload sheet (song-title, song-save, song-pick-audio, album chips visible). Withdrawals tab: artist-withdraw-open2 opens sheet with wd-amount + wd-details + wd-save. Profile tab renders name/email/phone/genre/bio + artist-logout. Register page: /artist/register accepts reg-name+reg-email+reg-password → artist-register-submit → artist-register-done screen shown, registers as pending (confirmed via admin list = 5 artists incl. TEST_ui). Admin dashboard (/admin, admin@vibe.app): admin-menu opens accordion drawer with brand header, all 5 groups visible (nav-group-reports/contents/control/settings/choir) — 'reports' expanded by default, others show chevron-down. Toggle test: tapping nav-group-contents expands (nav-albums-songs visible=true), tap again collapses (visible=false). Footer shows 'Vibe Admin admin@vibe.app' + drawer-logout icon. Artists & Singers group → Artists item routes to artists tab with 5 artists rendered (3 pending, 2 approved) each with artist-approve-{id}/artist-reject-{id}/artist-suspend-{id} testIDs. Withdrawals nav item routes to withdrawals tab (empty list rendered as 'No withdrawal requests yet.'). No red screen, no runtime errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Artist Album modal (Sheet)", "issue": "On 390x844 the 'album-save' button rendered slightly below the visible viewport during automation (Playwright logged 'Element is outside of the viewport' before scrolling into view). Album creation still succeeded after Playwright's auto-scroll+click. On a real device with the keyboard open the button may be obscured. Consider wrapping the Sheet body in a ScrollView or reducing SPACING.xxl bottom padding.", "testID": "album-save", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/admin (top segment)", "issues": ["Segmented control only exposes Dashboard/Content/Users tabs, but drawer nav routes to two additional internal tabs (artists, withdrawals). When those tabs are active, none of the visible segment buttons appears selected — user has no in-segment indicator that they're on Artists/Withdrawals. Consider either adding Artists/Withdrawals to the segment (or a breadcrumb/subtitle) to reflect current tab."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_13.json",
+    "/app/backend/tests/test_artists.py",
+    "/app/test_reports/pytest/artists.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: In /admin index.tsx, add a subtle 'Artists' / 'Withdrawals' pill/subtitle when tab === 'artists' or 'withdrawals' since these tabs are not in the top segment control (users only reach them via drawer).",
+    "OPTIONAL: Wrap the artist portal Sheet body in a ScrollView (or reduce paddingBottom: SPACING.xxl) so save buttons are always visible on 390x844 with keyboard open.",
+    "OPTIONAL: Seed a few play_events against demo artist's songs so /api/artists/earnings shows non-zero available and the positive withdrawal path is exercisable end-to-end.",
+    "OPTIONAL: /api/artists/admin/{id}/status could echo the updated artist doc instead of just {ok, status} — minor DX improvement for the UI."
+  ],
+  "critical_code_review_comments": [
+    "backend/routers/artists.py:315 admin_set_artist_status doesn't invalidate the artist's existing JWT after 'rejected'/'suspended'. get_current_artist re-checks status on every request (blocks token via 401), so it's fine, but consider adding a token version/revocation field for stronger session control.",
+    "backend/storage.py init_storage module-level cache _storage_key is process-wide singleton — fine for single uvicorn worker but if workers scale, each will init independently (idempotent per docs). Not a bug, just noting.",
+    "frontend/app/artist/index.tsx (376 lines) is fine; frontend/app/admin/index.tsx is now 897 lines — well above 700-line soft limit. Recommend extracting Drawer, ArtistsList, WithdrawalsList, and DashboardOverview into /admin/components/*.",
+    "frontend/app/admin/index.tsx:190 setArtistStatus arrow body starts with a stray 'try {' on the same line as the '{' — no bug, just an odd formatting artifact.",
+    "The 'Artist Management' nav item and the 'Artists' nav item both route to the same tab 'artists' and both slug to nav-artist-management vs nav-artists. Fine, but consider consolidating or giving them distinct sub-views (e.g., approvals vs full list)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_artists.py (new)"
+  ],
+  "success_rate": {"backend": "100% (20/20 executed, 1 environment-skipped)", "frontend": "100% (all critical flows verified; 1 minor modal-viewport observation)"},
+  "seed_data_creation": "Ephemeral TEST_pending_*@test.com pending artists (created + approved by test), TEST_alb_* album + TEST_song_* song owned by demo artist, TEST_ui_*@test.com pending artist created via /artist/register UI flow. Left in DB (harmless — visible in admin Artists tab).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Artist portal (routers/artists.py) uses a SEPARATE `artists` MongoDB collection + JWT 'typ':'artist' — do NOT try /api/auth/login for artists. Object storage is real Emergent Managed (INTEGRATION_PROXY_URL + EMERGENT_LLM_KEY); tests upload real bytes and download them back — no mocks. Admin dashboard sidebar accordion is fully wired: NAV tree lives in /app/frontend/app/admin/index.tsx; each group has testID nav-group-<key>, each leaf has testID nav-<slug(label)>. Currently 'Artists' and 'Artist Management' both point to tab='artists' (duplicate mapping is intentional — see review comment). Regression: run test_artists.py alongside existing test_auth_flows.py + test_admin_access.py + test_analytics_and_delete.py.",
+  "rca_of_issue": "N/A — no bugs found; only minor UX polish items listed above."
+}
