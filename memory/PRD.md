@@ -23,6 +23,12 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - Recommendation engine: weighted scoring (same_album=100, genre=40, popularity=25, artist=20, recency=15) + diversity fallback (cap consecutive same-artist)
 - Subscription plans: Kwa Siku 500, Kwa Wiki 2000, Kwa Mwezi 5500 TZS (simulated Azam Pay)
 
+## What's Been Implemented — Session 6 (Aug 14, 2026) — Admin Dashboard Enrichment
+- ✅ /api/admin/stats now returns radio/churches/neno/plans/transactions counts + guest vs logged plays + recent_transactions
+- ✅ Admin Overview: 12 stat cards, plays breakdown bar (logged vs guest), top songs, recent payments
+- ✅ Admin gate: guests get a "Ingia kama Admin" login button (no dead-end)
+- ✅ Testing: 10/10 backend + full admin UI verified (iteration_10)
+
 ## What's Been Implemented — Session 5 (Aug 11, 2026) — Share Cards, Continue Listening, Downloads Manager
 - ✅ Share Cards: branded gradient image card (Vibe logo, art, title, artist, tagline) via react-native-view-shot + expo-sharing; web falls back to link share (navigator.share/clipboard)
 - ✅ Continue Listening: PlayerContext persists session snapshot (track+queue+index+position) to storage; restores on launch (paused) and resumes+seeks on play

@@ -44,13 +44,25 @@ async def dashboard_stats(admin: dict = Depends(require_admin)):
     total_albums = await db.albums.count_documents({})
     total_plays = await db.play_events.count_documents({})
     total_playlists = await db.playlists.count_documents({})
+    total_radio = await db.radio_stations.count_documents({})
+    total_churches = await db.churches.count_documents({})
+    total_neno = await db.neno_entries.count_documents({})
+    total_plans = await db.subscription_plans.count_documents({"status": "active"})
+    total_transactions = await db.transactions.count_documents({"status": "completed"})
+    guest_plays = await db.play_events.count_documents({"is_guest": True})
+    logged_plays = await db.play_events.count_documents({"is_guest": False})
     txns = await db.transactions.find({"status": "completed"}, {"_id": 0, "amount": 1}).to_list(10000)
     revenue = sum(t.get("amount", 0) for t in txns)
 
-    top_songs = await db.songs.find({}, {"_id": 0, "song_id": 1, "title": 1, "plays": 1, "likes": 1}).sort("plays", -1).limit(5).to_list(5)
+    top_songs = await db.songs.find({}, {"_id": 0, "song_id": 1, "title": 1, "plays": 1, "likes": 1, "album_id": 1}).sort("plays", -1).limit(5).to_list(5)
     for s in top_songs:
-        alb = await db.albums.find_one({"album_id": (await db.songs.find_one({"song_id": s["song_id"]}, {"_id": 0, "album_id": 1}) or {}).get("album_id")}, {"_id": 0, "artist_name": 1})
+        alb = await db.albums.find_one({"album_id": s.get("album_id")}, {"_id": 0, "artist_name": 1})
         s["artist_name"] = alb.get("artist_name") if alb else None
+
+    recent_txns = await db.transactions.find({"status": "completed"}, {"_id": 0}).sort("created_at", -1).limit(5).to_list(5)
+    for t in recent_txns:
+        if t.get("created_at"):
+            t["created_at"] = str(t["created_at"])
 
     return {
         "total_users": total_users,
@@ -59,9 +71,17 @@ async def dashboard_stats(admin: dict = Depends(require_admin)):
         "total_albums": total_albums,
         "total_plays": total_plays,
         "total_playlists": total_playlists,
+        "total_radio": total_radio,
+        "total_churches": total_churches,
+        "total_neno": total_neno,
+        "total_plans": total_plans,
+        "total_transactions": total_transactions,
+        "guest_plays": guest_plays,
+        "logged_plays": logged_plays,
         "revenue": revenue,
         "currency": "TZS",
         "top_songs": top_songs,
+        "recent_transactions": recent_txns,
     }
 
 

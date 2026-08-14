@@ -107,8 +107,37 @@ export default function AdminDashboard() {
                 <StatCard testID="stat-songs" icon="musical-notes" label="Nyimbo" value={stats.total_songs} color={COLORS.success} />
                 <StatCard testID="stat-albums" icon="albums" label="Albamu" value={stats.total_albums} />
                 <StatCard testID="stat-plays" icon="play" label="Michezo" value={stats.total_plays} color={COLORS.primaryLight} />
+                <StatCard testID="stat-playlists" icon="list" label="Playlist" value={stats.total_playlists} />
+                <StatCard testID="stat-radio" icon="radio" label="Redio" value={stats.total_radio} color={COLORS.primaryLight} />
+                <StatCard testID="stat-neno" icon="sunny" label="Neno la Leo" value={stats.total_neno} color={COLORS.warning} />
+                <StatCard testID="stat-churches" icon="business" label="Makanisa" value={stats.total_churches} />
+                <StatCard testID="stat-plans" icon="pricetags" label="Vifurushi" value={stats.total_plans} color={COLORS.success} />
+                <StatCard testID="stat-txns" icon="receipt" label="Malipo" value={stats.total_transactions} />
                 <StatCard testID="stat-revenue" icon="cash" label={`Mapato (${stats.currency})`} value={stats.revenue?.toLocaleString()} color={COLORS.success} />
               </View>
+
+              {/* Plays breakdown: guest vs logged-in */}
+              <Text style={styles.sectionTitle}>Uchambuzi wa Michezo</Text>
+              <View style={styles.breakdown}>
+                <View style={styles.breakItem}>
+                  <Text style={styles.breakNum}>{stats.logged_plays ?? 0}</Text>
+                  <Text style={styles.breakLabel}>Waliojisajili</Text>
+                </View>
+                <View style={styles.breakDivider} />
+                <View style={styles.breakItem}>
+                  <Text style={styles.breakNum}>{stats.guest_plays ?? 0}</Text>
+                  <Text style={styles.breakLabel}>Wageni</Text>
+                </View>
+              </View>
+              {(() => {
+                const g = stats.guest_plays ?? 0; const l = stats.logged_plays ?? 0; const tot = g + l || 1;
+                return (
+                  <View style={styles.barTrack}>
+                    <View style={{ width: `${(l / tot) * 100}%`, backgroundColor: COLORS.primary, height: 10, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} />
+                    <View style={{ width: `${(g / tot) * 100}%`, backgroundColor: COLORS.warning, height: 10, borderTopRightRadius: 6, borderBottomRightRadius: 6 }} />
+                  </View>
+                );
+              })()}
 
               <Text style={styles.sectionTitle}>Nyimbo Zinazoongoza</Text>
               {(stats.top_songs || []).map((s: any, i: number) => (
@@ -121,6 +150,23 @@ export default function AdminDashboard() {
                   <Text style={styles.topPlays}>{s.plays} ▶</Text>
                 </View>
               ))}
+
+              {/* Recent transactions */}
+              <Text style={styles.sectionTitle}>Malipo ya Karibuni</Text>
+              {(stats.recent_transactions || []).length === 0 ? (
+                <Text style={styles.topSub}>Hakuna malipo bado.</Text>
+              ) : (
+                (stats.recent_transactions || []).map((t: any, i: number) => (
+                  <View key={i} style={styles.topRow}>
+                    <Ionicons name="checkmark-circle" size={18} color={COLORS.success} />
+                    <View style={{ flex: 1, marginLeft: SPACING.sm }}>
+                      <Text style={styles.topTitle} numberOfLines={1}>{t.plan_id || "Premium"}</Text>
+                      <Text style={styles.topSub} numberOfLines={1}>{t.phone || "-"}</Text>
+                    </View>
+                    <Text style={styles.topPlays}>{stats.currency} {Number(t.amount || 0).toLocaleString()}</Text>
+                  </View>
+                ))
+              )}
             </>
           ) : null}
 
@@ -254,6 +300,12 @@ const styles = StyleSheet.create({
   segTextActive: { color: "#fff" },
   statGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
   statCard: { width: "31%", backgroundColor: COLORS.card, borderRadius: RADIUS.md, padding: SPACING.md, marginBottom: SPACING.sm, borderWidth: 1, borderColor: COLORS.border, alignItems: "flex-start" },
+  breakdown: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.card, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.border, marginBottom: SPACING.sm },
+  breakItem: { flex: 1, alignItems: "center" },
+  breakNum: { color: COLORS.text, fontSize: FONT.xxl, fontWeight: "800" },
+  breakLabel: { color: COLORS.textSecondary, fontSize: FONT.sm, marginTop: 2 },
+  breakDivider: { width: 1, height: 40, backgroundColor: COLORS.border },
+  barTrack: { flexDirection: "row", width: "100%", height: 10, borderRadius: 6, backgroundColor: COLORS.surface, overflow: "hidden", marginBottom: SPACING.sm },
   statValue: { color: COLORS.text, fontSize: FONT.xl, fontWeight: "800", marginTop: SPACING.xs },
   statLabel: { color: COLORS.textSecondary, fontSize: FONT.xs, marginTop: 2 },
   sectionTitle: { color: COLORS.text, fontSize: FONT.lg, fontWeight: "800", marginTop: SPACING.lg, marginBottom: SPACING.sm },
