@@ -16,7 +16,29 @@ class AlbumIn(BaseModel):
     category_id: Optional[str] = None
     thumbnail: Optional[str] = None
     tags: List[str] = []
+    countries: List[str] = ["Global"]
+    release_date: Optional[str] = None
+    artist_id: Optional[str] = None
+    status: str = "active"
     monetization_type: str = "free"
+
+
+class AlbumUpdate(BaseModel):
+    title: Optional[str] = None
+    artist_name: Optional[str] = None
+    description: Optional[str] = None
+    category_id: Optional[str] = None
+    thumbnail: Optional[str] = None
+    tags: Optional[List[str]] = None
+    countries: Optional[List[str]] = None
+    release_date: Optional[str] = None
+    monetization_type: Optional[str] = None
+    status: Optional[str] = None
+
+
+class CategoryIn(BaseModel):
+    name: str
+    color: Optional[str] = "#8b5cf6"
 
 
 class SongIn(BaseModel):
@@ -105,6 +127,12 @@ async def plays_analytics(admin: dict = Depends(require_admin)):
 
 
 # -------- Albums CRUD --------
+@router.get("/albums")
+async def list_albums(admin: dict = Depends(require_admin)):
+    albums = await db.albums.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return albums
+
+
 @router.post("/albums")
 async def create_album(body: AlbumIn, admin: dict = Depends(require_admin)):
     cat = None
@@ -114,14 +142,16 @@ async def create_album(body: AlbumIn, admin: dict = Depends(require_admin)):
         "album_id": f"alb_{uuid.uuid4().hex[:12]}",
         "title": body.title,
         "artist_name": body.artist_name,
-        "artist_id": f"art_{uuid.uuid4().hex[:8]}",
+        "artist_id": body.artist_id or f"art_{uuid.uuid4().hex[:8]}",
         "description": body.description,
         "category_id": body.category_id,
         "category_name": cat.get("name") if cat else None,
         "thumbnail": body.thumbnail,
         "tags": body.tags,
+        "countries": body.countries or ["Global"],
+        "release_date": body.release_date,
         "monetization_type": body.monetization_type,
-        "status": "active",
+        "status": body.status or "active",
         "songs_count": 0,
         "total_plays": 0,
         "created_at": now_utc(),
@@ -129,6 +159,31 @@ async def create_album(body: AlbumIn, admin: dict = Depends(require_admin)):
     await db.albums.insert_one(dict(doc))
     doc.pop("_id", None)
     return doc
+
+
+@router.put("/albums/{album_id}")
+async def update_album(album_id: str, body: AlbumUpdate, admin: dict = Depends(require_admin)):
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if "category_id" in updates:
+        cat = await db.categories.find_one({"category_id": updates["category_id"]}, {"_id": 0, "name": 1})
+        updates["category_name"] = cat.get("name") if cat else None
+    if updates:
+        res = await db.albums.update_one({"album_id": album_id}, {"$set": updates})
+        if res.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Album not found")
+    doc = await db.albums.find_one({"album_id": album_id}, {"_id": 0})
+    return doc
+
+
+@router.patch("/albums/{album_id}/status")
+async def album_status(album_id: str, body: dict, admin: dict = Depends(require_admin)):
+    status = body.get("status")
+    if status not in ("active", "inactive"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+    res = await db.albums.update_one({"album_id": album_id}, {"$set": {"status": status}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Album not found")
+    return {"ok": True, "status": status}
 
 
 @router.delete("/albums/{album_id}")
@@ -170,6 +225,39 @@ async def delete_song(song_id: str, admin: dict = Depends(require_admin)):
     if song:
         await db.albums.update_one({"album_id": song.get("album_id")}, {"$inc": {"songs_count": -1}})
     await db.songs.delete_one({"song_id": song_id})
+    return {"ok": True}
+
+
+# -------- Categories --------
+@router.get("/categories")
+async def list_categories(admin: dict = Depends(require_admin)):
+    cats = await db.categories.find({}, {"_id": 0}).sort("name", 1).to_list(200)
+    for c in cats:
+        c["album_count"] = await db.albums.count_documents({"category_id": c["category_id"]})
+    return cats
+
+
+@router.post("/categories")
+async def create_category(body: CategoryIn, admin: dict = Depends(require_admin)):
+    existing = await db.categories.find_one({"name": {"$regex": f"^{body.name}$", "$options": "i"}})
+    if existing:
+        raise HTTPException(status_code=409, detail="Category already exists")
+    doc = {
+        "category_id": f"cat_{uuid.uuid4().hex[:8]}",
+        "name": body.name.strip(),
+        "color": body.color or "#8b5cf6",
+        "created_at": now_utc(),
+    }
+    await db.categories.insert_one(dict(doc))
+    doc.pop("_id", None)
+    doc["album_count"] = 0
+    return doc
+
+
+@router.delete("/categories/{category_id}")
+async def delete_category(category_id: str, admin: dict = Depends(require_admin)):
+    await db.categories.delete_one({"category_id": category_id})
+    await db.albums.update_many({"category_id": category_id}, {"$set": {"category_id": None, "category_name": None}})
     return {"ok": True}
 
 

@@ -1,0 +1,31 @@
+{
+  "summary": "Session 11 — Frontend-only regression of Content Management (Albums & Songs), Categories (genres), Analytics 'Data Usage' sub-tab, and the Choir→Music rebrand. All 5 areas PASSED on 390x844 web preview. (1) Admin login (admin@vibe.app/Vibe@2026) → /admin loads, admin-menu opens drawer. Contents group is COLLAPSED by default as expected; tap nav-group-contents expands it — nav-albums-songs and nav-categories become visible. (2) Albums & Songs page: content-create-album + content-search present; 10 album rows rendered with thumbnails / badges / tags; every row's album-menu-{id} opens a menu exposing album-edit-{id} / album-tags-{id} / album-toggle-{id} / album-delete-{id}. Create Album flow end-to-end: fill album-name='TEST_UI_Album_1' → tap first cat-pick-* → tap country-Kenya → fill album-artist → tap tag-New → tap album-form-save → new album appeared in list. Then filtered via content-search, opened menu, tapped album-toggle-{new_id} (deactivate → toast), reopened menu, tapped album-tags-{new_id} → mtag-New → manage-tags-save (tags updated), reopened menu, tapped album-delete-{new_id} → album disappeared from list (count 0). (3) Categories tab: all 8 required genres present with album counts — Hip Hop, R&B, Bongo Hits, Gospel, Amapiano, Taarabu, Za Kale, Afrobeat. Added TEST_UI_Cat via cat-name + swatch-* + cat-add → appeared → deleted via cat-del-{id} (9→8 rows). (4) Analytics: analytics-sub-overview + analytics-sub-datausage sub-tabs both rendered; Overview highlight cards PAID PLAYS / FREE LISTENS / CONVERSION visible with count cards (Albums/Songs/Artists/Users). Data Usage sub-tab renders 4 cards (Total Data Used / Streaming Data / Downloads Data / Listening Minutes) + 2 bar charts, no crash. (5) Rebrand: admin sidebar shows 'Artists & Singers', 'Aggregators', 'Production Houses' groups/items and does NOT contain 'Choir', 'Bible ', 'Neno', 'Churches', 'Religious Leaders'. Admin overview cards show 'Production Houses' (value 3) and 'Aggregators' (value 0) — NO 'Churches' / 'Religious Leaders'. Consumer app: bottom tab labeled 'Vitabu' (title in _layout.tsx line 55), home quick tiles Podcasts/Vitabu/Studio all rendered (quick-podcasts testID present). /podcasts route renders header with podcasts-back testID. Only console warning is 'props.pointerEvents is deprecated' (RN Web internal, not our code). No red screen, no page errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_15.json"
+  ],
+  "action_items": [
+    "OPTIONAL (code hygiene): /app/frontend/app/admin/index.tsx is 1105 lines — still well over the 700-line soft limit (already flagged in iter_13 and iter_14). Extracting the analytics/revenue/transactions/location/artists/withdrawals tab renderers into /admin/tabs/*.tsx would help. Not blocking.",
+    "OPTIONAL (code hygiene): /app/frontend/app/admin/index.tsx:193 setArtistStatus body starts with a stray 'try {' on the same line as the arrow function's opening '{' — cosmetic formatting glitch, no bug.",
+    "OPTIONAL (perf/UX): ContentManager.tsx re-fetches the FULL albums list after every create/edit/toggle/delete/tags mutation via load(). Fine at 10 albums, but consider optimistic local updates once the catalog grows past ~200 albums."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/app/admin/index.tsx (1105 lines) exceeds the 700-line soft limit. Recommend extracting DashboardOverview, ChartCard, Legend, DemoPie, NavRow, and each drawer-only tab body into separate files under /app/frontend/app/admin/components/.",
+    "/app/frontend/src/components/admin/ContentManager.tsx uses `<KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>` — on Android with a physical keyboard the sheet may still be pushed but not resized. Consider behavior='height' for Android for consistency with iOS.",
+    "/app/frontend/src/components/admin/ContentManager.tsx:143 sets `menuFor` state on the same row that renders the menu absolutely-positioned. Because there's no outside-tap-to-close listener, tapping elsewhere on the screen does not close the popover — only tapping the same album-menu-{id} again does. Consider wrapping the list in a Pressable that closes the menu when the outside is tapped.",
+    "/app/frontend/app/(tabs)/_layout.tsx still references `name=\"bible\"` for the 'Vitabu' tab. Label is correctly rebranded to 'Vitabu' (line 55), but the underlying route/file is still bible.tsx — cosmetic mismatch only, not a bug. Consider renaming file to books.tsx and updating the Tabs.Screen name to keep test/URLs consistent with the rebrand."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (skipped per request — main agent reports 15/15 passed prior)", "frontend": "100% — all 5 review areas verified end-to-end"},
+  "seed_data_creation": "One ephemeral TEST_UI_Album_1 album (created, toggled, tags-updated, then deleted — clean). One ephemeral TEST_UI_Cat category (created then deleted via cat-del — clean). No leftover test data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Admin sidebar accordion contract: `nav-group-<key>` for group headers, `nav-<slug(label)>` for leaves; Reports & Analytics is expanded by default (expanded:{reports:true}), all other groups (contents/control/settings/choir/leaders) are COLLAPSED — must tap nav-group-<key> before accessing children. Content mutations (create/edit/toggle/tags/delete) in ContentManager all reload the full album list on success. Categories page (/admin → nav-categories) reads from the same /api/categories endpoint; deleting a category with existing albums may be blocked by backend — not exercised in this session (only ephemeral TEST_UI_Cat with 0 albums was tested). Rebrand is confirmed at UI level: no Choir/Bible/Neno/Churches/Religious Leaders in admin sidebar or overview cards. /app/frontend/app/(tabs)/_layout.tsx uses tab name='bible' but title='Vitabu' — rendered label is 'Vitabu'.",
+  "rca_of_issue": "N/A — no bugs found. All Content Management, Categories, Analytics Data Usage, and rebrand items behave as specified."
+}

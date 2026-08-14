@@ -402,3 +402,49 @@ async def location_overview(admin: dict = Depends(require_admin)):
         "growth": growth,
     }
 
+
+AVG_STREAM_MB = 4.0  # simulated egress per stream
+AVG_DOWNLOAD_MB = 6.0
+
+
+@router.get("/data-usage")
+async def data_usage(days: int = 30, admin: dict = Depends(require_admin)):
+    now = datetime.now(timezone.utc)
+    start = now - timedelta(days=days)
+    total_streams = await db.play_events.count_documents({"created_at": {"$gte": start}})
+    total_downloads = await db.downloads.count_documents({"created_at": {"$gte": start}})
+    avg_min = await _avg_song_minutes()
+    listener_ids = await db.play_events.distinct("user_id", {"created_at": {"$gte": start}, "user_id": {"$ne": None}})
+
+    streaming_gb = round(total_streams * AVG_STREAM_MB / 1024, 2)
+    downloads_gb = round(total_downloads * AVG_DOWNLOAD_MB / 1024, 2)
+    listening_minutes = round(total_streams * avg_min)
+
+    per_day = []
+    minutes_per_day = []
+    for i in range(days - 1, -1, -1):
+        day = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+        nxt = day + timedelta(days=1)
+        s = await db.play_events.count_documents({"created_at": {"$gte": day, "$lt": nxt}})
+        d = await db.downloads.count_documents({"created_at": {"$gte": day, "$lt": nxt}})
+        label = day.strftime("%m-%d")
+        per_day.append({
+            "date": label,
+            "streams_mb": round(s * AVG_STREAM_MB, 1),
+            "downloads_mb": round(d * AVG_DOWNLOAD_MB, 1),
+        })
+        minutes_per_day.append({"date": label, "minutes": round(s * avg_min)})
+
+    return {
+        "days": days,
+        "total_data_gb": round(streaming_gb + downloads_gb, 2),
+        "streaming_gb": streaming_gb,
+        "downloads_gb": downloads_gb,
+        "total_streams": total_streams,
+        "total_downloads": total_downloads,
+        "listening_minutes": listening_minutes,
+        "unique_listeners": len(listener_ids),
+        "per_day": per_day,
+        "minutes_per_day": minutes_per_day,
+    }
+

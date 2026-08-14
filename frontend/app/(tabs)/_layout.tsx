@@ -52,7 +52,7 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="bible"
           options={{
-            title: "Biblia",
+            title: "Vitabu",
             tabBarIcon: ({ color, size }) => <Ionicons name="book" size={size} color={color} />,
           }}
         />

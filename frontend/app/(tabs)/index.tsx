@@ -14,9 +14,9 @@ import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 
 const QUICK = [
   { key: "radio", label: "Redio", icon: "radio", route: "/radio", color: "#0077B6" },
-  { key: "neno", label: "Neno la Leo", icon: "sunny", route: "/neno", color: "#FFA502" },
-  { key: "bible", label: "Biblia", icon: "book", route: "/(tabs)/bible", color: "#2ED573" },
-  { key: "churches", label: "Makanisa", icon: "business", route: "/churches", color: "#a78bfa" },
+  { key: "podcasts", label: "Podcasts", icon: "mic", route: "/podcasts", color: "#FFA502" },
+  { key: "books", label: "Vitabu", icon: "book", route: "/(tabs)/bible", color: "#2ED573" },
+  { key: "studios", label: "Studio", icon: "business", route: "/churches", color: "#a78bfa" },
 ];
 
 export default function Home() {

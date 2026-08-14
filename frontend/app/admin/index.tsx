@@ -1,15 +1,17 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator,
-  TextInput, Modal, KeyboardAvoidingView, Platform, Dimensions,
+  Modal, Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { LineChart, BarChart, PieChart } from "react-native-gifted-charts";
-import { adminApi, musicApi } from "@/src/services/api";
+import { adminApi } from "@/src/services/api";
 import { adminArtistApi } from "@/src/services/artistApi";
+import ContentManager from "@/src/components/admin/ContentManager";
+import CategoriesManager from "@/src/components/admin/CategoriesManager";
 import { useAuth } from "@/src/context/AuthContext";
 
 // Gracefy admin palette (zinc / violet) — faithful to the original web dashboard
@@ -46,11 +48,10 @@ const NAV: any[] = [
   ]},
   { type: "group", key: "contents", label: "Contents", icon: "folder", items: [
     { label: "Albums & Songs", icon: "musical-notes", tab: "content" },
-    { label: "Mafundisho", icon: "book" },
-    { label: "Neno la Leo", icon: "bookmark" },
-    { label: "Biblia na Vitabu", icon: "book-outline" },
+    { label: "Podcasts", icon: "mic-outline" },
+    { label: "Books", icon: "book-outline" },
     { label: "Special Mixes", icon: "disc" },
-    { label: "Song Categories", icon: "pricetags" },
+    { label: "Categories", icon: "pricetags", tab: "categories" },
   ]},
   { type: "group", key: "control", label: "Control & Management", icon: "shield", items: [
     { label: "Role Management", icon: "shield-half" },
@@ -80,12 +81,12 @@ const NAV: any[] = [
     { label: "Artist Management", icon: "people", tab: "artists" },
     { label: "Artist Accounts", icon: "wallet", tab: "withdrawals" },
   ]},
-  { type: "group", key: "leaders", label: "Religious Leaders", icon: "book", items: [
-    { label: "Leader Management", icon: "people" },
+  { type: "group", key: "leaders", label: "Aggregators", icon: "briefcase", items: [
+    { label: "Aggregator Management", icon: "people" },
   ]},
   { type: "item", label: "App Users", icon: "people", tab: "users" },
   { type: "item", label: "Admin Users", icon: "shield-checkmark" },
-  { type: "item", label: "Churches", icon: "business" },
+  { type: "item", label: "Production Houses", icon: "business" },
   { type: "item", label: "Live Seminars", icon: "videocam" },
   { type: "item", label: "Live Radio", icon: "radio" },
   { type: "item", label: "Audio Rooms", icon: "mic-circle" },
@@ -103,15 +104,16 @@ const TAB_TITLES: Record<string, string> = {
   location: "Location Analytics",
   artists: "Artists & Singers",
   withdrawals: "Withdrawals",
+  content: "Albums & Songs",
+  categories: "Categories",
 };
 
 export default function AdminDashboard() {
   const router = useRouter();
   const { isAdmin, isGuest, loading: authLoading, user, logout } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
-  const [albums, setAlbums] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"overview" | "content" | "users" | "artists" | "withdrawals" | "analytics" | "revenue" | "transactions" | "location">("overview");
+  const [tab, setTab] = useState<"overview" | "content" | "users" | "artists" | "withdrawals" | "analytics" | "revenue" | "transactions" | "location" | "categories">("overview");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ reports: true });
   const [toast, setToast] = useState("");
@@ -130,19 +132,14 @@ export default function AdminDashboard() {
   const [txns, setTxns] = useState<any>(null);
   const [location, setLocation] = useState<any>(null);
   const [txStatus, setTxStatus] = useState("all");
+  const [analyticsSub, setAnalyticsSub] = useState<"overview" | "datausage">("overview");
+  const [dataUsage, setDataUsage] = useState<any>(null);
   const pollRef = useRef<any>(null);
-
-  // add forms
-  const [showAlbum, setShowAlbum] = useState(false);
-  const [showSong, setShowSong] = useState(false);
-  const [albForm, setAlbForm] = useState({ title: "", artist_name: "", thumbnail: "" });
-  const [songForm, setSongForm] = useState({ title: "", album_id: "", audio_url: "" });
 
   const load = useCallback(async () => {
     try {
-      const [u, a, ov, tr, dm, rt, dl, ll, arts, wds] = await Promise.all([
+      const [u, ov, tr, dm, rt, dl, ll, arts, wds] = await Promise.all([
         adminApi.users().catch(() => []),
-        musicApi.albums().catch(() => []),
         adminApi.overview().catch(() => null),
         adminApi.trends().catch(() => null),
         adminApi.demographics().catch(() => null),
@@ -152,7 +149,7 @@ export default function AdminDashboard() {
         adminArtistApi.list().catch(() => []),
         adminArtistApi.withdrawals().catch(() => []),
       ]);
-      setUsers(u); setAlbums(a);
+      setUsers(u);
       setOverview(ov); setTrends(tr); setDemographics(dm);
       setRealtime(rt); setDownloadStats(dl); setLiveListeners(ll);
       setArtistsList(arts); setWithdrawalsList(wds);
@@ -182,7 +179,8 @@ export default function AdminDashboard() {
     if (tab === "revenue" && !revenue) adminApi.revenueOverview().then(setRevenue).catch(() => {});
     if (tab === "location" && !location) adminApi.locationOverview().then(setLocation).catch(() => {});
     if (tab === "transactions") adminApi.transactions(txStatus).then(setTxns).catch(() => {});
-  }, [tab, txStatus, isAdmin, enhanced, revenue, location]);
+    if (tab === "analytics" && analyticsSub === "datausage" && !dataUsage) adminApi.dataUsage(30).then(setDataUsage).catch(() => {});
+  }, [tab, txStatus, isAdmin, enhanced, revenue, location, analyticsSub, dataUsage]);
 
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(""), 2200); };
 
@@ -190,24 +188,6 @@ export default function AdminDashboard() {
     setDrawerOpen(false);
     if (node.tab) setTab(node.tab);
     else flash(`${node.label}: Inakuja hivi karibuni`);
-  };
-
-  const createAlbum = async () => {
-    if (!albForm.title || !albForm.artist_name) return;
-    try {
-      await adminApi.createAlbum({ ...albForm, thumbnail: albForm.thumbnail || "https://picsum.photos/seed/vibe/400" });
-      setShowAlbum(false); setAlbForm({ title: "", artist_name: "", thumbnail: "" });
-      flash("Albamu imeongezwa"); load();
-    } catch (e: any) { flash(e.message); }
-  };
-
-  const createSong = async () => {
-    if (!songForm.title || !songForm.album_id || !songForm.audio_url) return;
-    try {
-      await adminApi.createSong(songForm);
-      setShowSong(false); setSongForm({ title: "", album_id: "", audio_url: "" });
-      flash("Wimbo umeongezwa"); load();
-    } catch (e: any) { flash(e.message); }
   };
 
   const setArtistStatus = async (id: string, s: string) => {    try {
@@ -290,29 +270,9 @@ export default function AdminDashboard() {
             />
           ) : null}
 
-          {tab === "content" ? (
-            <>
-              <View style={styles.actionRow}>
-                <Pressable testID="admin-add-album" style={styles.actBtn} onPress={() => setShowAlbum(true)}>
-                  <Ionicons name="add" size={20} color="#fff" />
-                  <Text style={styles.actText}>Albamu</Text>
-                </Pressable>
-                <Pressable testID="admin-add-song" style={[styles.actBtn, { backgroundColor: C.emerald }]} onPress={() => setShowSong(true)}>
-                  <Ionicons name="add" size={20} color="#fff" />
-                  <Text style={styles.actText}>Wimbo</Text>
-                </Pressable>
-              </View>
-              <Text style={styles.sectionTitle}>Albamu ({albums.length})</Text>
-              {albums.map((a) => (
-                <View key={a.album_id} style={styles.contentRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.topTitle} numberOfLines={1}>{a.title}</Text>
-                    <Text style={styles.topSub}>{a.artist_name} · {a.songs_count} nyimbo</Text>
-                  </View>
-                </View>
-              ))}
-            </>
-          ) : null}
+          {tab === "content" ? <ContentManager onToast={flash} /> : null}
+
+          {tab === "categories" ? <CategoriesManager onToast={flash} /> : null}
 
           {tab === "users" ? (
             <>
@@ -400,45 +360,127 @@ export default function AdminDashboard() {
           {tab === "analytics" ? (
             !enhanced ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
               <View>
-                <Text style={styles.pageTitle}>Analytics</Text>
-                <Text style={styles.pageSub}>Streaming performance & engagement</Text>
-                <View style={styles.statGrid}>
-                  {[
-                    { l: "Total Streams", v: enhanced.overview.total_streams, s: `${enhanced.overview.revenue_streams} revenue-eligible`, c: C.violet, i: "play" },
-                    { l: "Unique Listeners", v: enhanced.overview.unique_listeners, s: "", c: C.blue, i: "people" },
-                    { l: "Total Hours", v: enhanced.overview.total_listening_hours, s: `${enhanced.overview.avg_session_duration} min avg`, c: C.emerald, i: "time" },
-                    { l: "Gross Revenue", v: `TZS ${Number(enhanced.overview.gross_revenue).toLocaleString()}`, s: "", c: C.amber, i: "cash" },
-                    { l: "Platform Revenue", v: `TZS ${Number(enhanced.overview.platform_revenue).toLocaleString()}`, s: "", c: C.pink, i: "trending-up" },
-                    { l: "Songs Played", v: enhanced.overview.unique_songs_played, s: "", c: C.blue, i: "headset" },
-                  ].map((s, i) => (
-                    <View key={i} style={styles.statCard}>
-                      <View style={[styles.statIcon, { backgroundColor: s.c + "22" }]}><Ionicons name={s.i as any} size={20} color={s.c} /></View>
-                      <Text style={styles.statValue} numberOfLines={1}>{s.v}</Text>
-                      <Text style={styles.statLabel}>{s.l}</Text>
-                      {s.s ? <Text style={styles.statSub}>{s.s}</Text> : null}
-                    </View>
+                <Text style={styles.pageTitle}>Analytics Dashboard</Text>
+                <Text style={styles.pageSub}>Comprehensive platform performance metrics</Text>
+
+                <View style={styles.subTabs}>
+                  {([["overview", "Overview"], ["datausage", "Data Usage"]] as const).map(([k, l]) => (
+                    <Pressable key={k} testID={`analytics-sub-${k}`} style={[styles.subTab, analyticsSub === k && styles.subTabOn]} onPress={() => setAnalyticsSub(k as any)}>
+                      <Text style={[styles.subTabText, analyticsSub === k && { color: "#fff" }]}>{l}</Text>
+                    </Pressable>
                   ))}
                 </View>
-                <ChartCard icon="play" iconColor={C.amber} title="Top Songs">
-                  {enhanced.top_songs?.length ? enhanced.top_songs.map((t: any, i: number) => (
-                    <View key={i} style={styles.rankRow}>
-                      <Text style={styles.locRank}>{i + 1}.</Text>
-                      <Text style={styles.locName} numberOfLines={1}>{t.title}</Text>
-                      <Text style={styles.locVal}>{Number(t.plays).toLocaleString()} ▶</Text>
+
+                {analyticsSub === "overview" ? (
+                  <>
+                    <View style={styles.statGrid}>
+                      {[
+                        { l: "Total Streams", v: enhanced.overview.total_streams, s: `${enhanced.overview.revenue_streams} revenue-eligible`, c: C.violet, i: "play" },
+                        { l: "Unique Listeners", v: enhanced.overview.unique_listeners, s: "", c: C.blue, i: "people" },
+                        { l: "Total Hours", v: enhanced.overview.total_listening_hours, s: `${enhanced.overview.avg_session_duration} min avg`, c: C.emerald, i: "time" },
+                        { l: "Gross Revenue", v: `TZS ${Number(enhanced.overview.gross_revenue).toLocaleString()}`, s: "", c: C.amber, i: "cash" },
+                        { l: "Platform Revenue", v: `TZS ${Number(enhanced.overview.platform_revenue).toLocaleString()}`, s: "", c: C.pink, i: "trending-up" },
+                        { l: "Songs Played", v: enhanced.overview.unique_songs_played, s: "", c: C.blue, i: "headset" },
+                      ].map((s, i) => (
+                        <View key={i} style={styles.statCard}>
+                          <View style={[styles.statIcon, { backgroundColor: s.c + "22" }]}><Ionicons name={s.i as any} size={20} color={s.c} /></View>
+                          <Text style={styles.statValue} numberOfLines={1}>{s.v}</Text>
+                          <Text style={styles.statLabel}>{s.l}</Text>
+                          {s.s ? <Text style={styles.statSub}>{s.s}</Text> : null}
+                        </View>
+                      ))}
                     </View>
-                  )) : <Empty />}
-                </ChartCard>
-                <ChartCard icon="musical-notes" iconColor={C.pink} title="Category Distribution">
-                  {enhanced.category_breakdown?.length ? (
-                    <>
-                      <View style={{ alignItems: "center", marginVertical: SP.sm }}>
-                        <PieChart donut innerRadius={50} radius={85} innerCircleColor={C.card}
-                          data={enhanced.category_breakdown.map((d: any, i: number) => ({ value: d.value, color: PIE_COLORS[i % PIE_COLORS.length] }))} />
+
+                    {/* highlight cards */}
+                    <View style={styles.hlRow}>
+                      <View style={[styles.hlCard, { borderColor: C.emerald }]}>
+                        <Text style={styles.hlLabel}>PAID PLAYS</Text>
+                        <Text style={[styles.hlValue, { color: C.emerald }]}>{Number(enhanced.overview.revenue_streams).toLocaleString()}</Text>
                       </View>
-                      <Legend items={enhanced.category_breakdown.map((d: any, i: number) => ({ c: PIE_COLORS[i % PIE_COLORS.length], t: d.name }))} />
+                      <View style={[styles.hlCard, { borderColor: C.blue }]}>
+                        <Text style={styles.hlLabel}>FREE LISTENS</Text>
+                        <Text style={[styles.hlValue, { color: C.blue }]}>{Number(enhanced.overview.total_streams - enhanced.overview.revenue_streams).toLocaleString()}</Text>
+                      </View>
+                      <View style={[styles.hlCard, { borderColor: C.amber }]}>
+                        <Text style={styles.hlLabel}>CONVERSION</Text>
+                        <Text style={[styles.hlValue, { color: C.amber }]}>{enhanced.overview.total_streams ? Math.round((enhanced.overview.revenue_streams / enhanced.overview.total_streams) * 100) : 0}%</Text>
+                      </View>
+                    </View>
+
+                    {/* count cards */}
+                    <View style={styles.secGrid}>
+                      {[
+                        { l: "Albums", v: overview?.total_albums || 0, i: "albums" },
+                        { l: "Songs", v: overview?.total_songs || 0, i: "musical-notes" },
+                        { l: "Artists", v: overview?.total_leaders != null ? (artistsList.length) : 0, i: "mic" },
+                        { l: "Users", v: overview?.total_users || 0, i: "people" },
+                      ].map((s, i) => (
+                        <View key={i} style={styles.secCard}>
+                          <View style={styles.secHead}><Ionicons name={s.i as any} size={14} color={C.muted} /><Text style={styles.secLabel}>{s.l}</Text></View>
+                          <Text style={styles.secValue}>{s.v}</Text>
+                        </View>
+                      ))}
+                    </View>
+
+                    <ChartCard icon="play" iconColor={C.amber} title="Top Songs">
+                      {enhanced.top_songs?.length ? enhanced.top_songs.map((t: any, i: number) => (
+                        <View key={i} style={styles.rankRow}>
+                          <Text style={styles.locRank}>{i + 1}.</Text>
+                          <Text style={styles.locName} numberOfLines={1}>{t.title}</Text>
+                          <Text style={styles.locVal}>{Number(t.plays).toLocaleString()} ▶</Text>
+                        </View>
+                      )) : <Empty />}
+                    </ChartCard>
+                    <ChartCard icon="musical-notes" iconColor={C.pink} title="Category Distribution">
+                      {enhanced.category_breakdown?.length ? (
+                        <>
+                          <View style={{ alignItems: "center", marginVertical: SP.sm }}>
+                            <PieChart donut innerRadius={50} radius={85} innerCircleColor={C.card}
+                              data={enhanced.category_breakdown.map((d: any, i: number) => ({ value: d.value, color: PIE_COLORS[i % PIE_COLORS.length] }))} />
+                          </View>
+                          <Legend items={enhanced.category_breakdown.map((d: any, i: number) => ({ c: PIE_COLORS[i % PIE_COLORS.length], t: d.name }))} />
+                        </>
+                      ) : <Empty />}
+                    </ChartCard>
+                  </>
+                ) : (
+                  !dataUsage ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
+                    <>
+                      <View style={styles.statGrid}>
+                        {[
+                          { l: "Total Data Used", v: `${dataUsage.total_data_gb} GB`, c: C.violet, i: "cloud" },
+                          { l: "Streaming Data", v: `${dataUsage.streaming_gb} GB`, c: C.blue, i: "play" },
+                          { l: "Downloads Data", v: `${dataUsage.downloads_gb} GB`, c: C.emerald, i: "download" },
+                          { l: "Listening Minutes", v: Number(dataUsage.listening_minutes).toLocaleString(), c: C.amber, i: "time" },
+                        ].map((s, i) => (
+                          <View key={i} style={styles.statCard}>
+                            <View style={[styles.statIcon, { backgroundColor: s.c + "22" }]}><Ionicons name={s.i as any} size={20} color={s.c} /></View>
+                            <Text style={styles.statValue} numberOfLines={1}>{s.v}</Text>
+                            <Text style={styles.statLabel}>{s.l}</Text>
+                          </View>
+                        ))}
+                      </View>
+                      <ChartCard icon="bar-chart" iconColor={C.blue} title="Data Used per Day" desc="Streams + Downloads (MB)">
+                        {dataUsage.per_day?.some((d: any) => d.streams_mb + d.downloads_mb > 0) ? (
+                          <BarChart
+                            data={dataUsage.per_day.slice(-14).map((d: any) => ({ value: Math.round(d.streams_mb + d.downloads_mb), label: d.date, frontColor: C.blue }))}
+                            barWidth={12} barBorderRadius={3} spacing={8}
+                            yAxisColor={C.border} xAxisColor={C.border} yAxisTextStyle={styles.axis} xAxisLabelTextStyle={styles.axis}
+                            height={170} noOfSections={4} initialSpacing={8} backgroundColor="transparent" />
+                        ) : <Empty />}
+                      </ChartCard>
+                      <ChartCard icon="time" iconColor={C.amber} title="Listening Minutes per Day">
+                        {dataUsage.minutes_per_day?.some((d: any) => d.minutes > 0) ? (
+                          <BarChart
+                            data={dataUsage.minutes_per_day.slice(-14).map((d: any) => ({ value: d.minutes, label: d.date, frontColor: C.amber }))}
+                            barWidth={12} barBorderRadius={3} spacing={8}
+                            yAxisColor={C.border} xAxisColor={C.border} yAxisTextStyle={styles.axis} xAxisLabelTextStyle={styles.axis}
+                            height={170} noOfSections={4} initialSpacing={8} backgroundColor="transparent" />
+                        ) : <Empty />}
+                      </ChartCard>
                     </>
-                  ) : <Empty />}
-                </ChartCard>
+                  )
+                )}
               </View>
             )
           ) : null}
@@ -636,25 +678,6 @@ export default function AdminDashboard() {
           </Pressable>
         </Pressable>
       </Modal>
-
-      {/* Add album modal */}
-      <FormModal
-        visible={showAlbum} title="Ongeza Albamu" onClose={() => setShowAlbum(false)} onSave={createAlbum} testID="album-form"
-        fields={[
-          { key: "title", label: "Kichwa", value: albForm.title, set: (v: string) => setAlbForm({ ...albForm, title: v }) },
-          { key: "artist_name", label: "Msanii", value: albForm.artist_name, set: (v: string) => setAlbForm({ ...albForm, artist_name: v }) },
-          { key: "thumbnail", label: "URL ya Picha (hiari)", value: albForm.thumbnail, set: (v: string) => setAlbForm({ ...albForm, thumbnail: v }) },
-        ]}
-      />
-      {/* Add song modal */}
-      <FormModal
-        visible={showSong} title="Ongeza Wimbo" onClose={() => setShowSong(false)} onSave={createSong} testID="song-form"
-        fields={[
-          { key: "title", label: "Kichwa", value: songForm.title, set: (v: string) => setSongForm({ ...songForm, title: v }) },
-          { key: "album_id", label: "Album ID", value: songForm.album_id, set: (v: string) => setSongForm({ ...songForm, album_id: v }) },
-          { key: "audio_url", label: "URL ya Sauti", value: songForm.audio_url, set: (v: string) => setSongForm({ ...songForm, audio_url: v }) },
-        ]}
-      />
     </SafeAreaView>
   );
 }
@@ -664,13 +687,13 @@ function DashboardOverview({ overview, trends, demographics, realtime, downloadS
   const primary = [
     { label: "Total Users", value: overview?.total_users || 0, icon: "people", color: C.violet, sub: `${overview?.total_customers || 0} customers` },
     { label: "Total Songs", value: overview?.total_songs || 0, icon: "musical-notes", color: C.emerald, sub: `${overview?.total_albums || 0} albums` },
-    { label: "Churches", value: overview?.total_churches || 0, icon: "business", color: C.amber, sub: `${overview?.total_leaders || 0} leaders` },
-    { label: "Total Raised", value: `${overview?.currency || "TZS"} ${Number(overview?.total_raised || 0).toLocaleString()}`, icon: "heart", color: C.pink, sub: `${overview?.total_donations || 0} campaigns` },
+    { label: "Production Houses", value: overview?.total_churches || 0, icon: "business", color: C.amber, sub: `${overview?.total_leaders || 0} aggregators` },
+    { label: "Total Raised", value: `${overview?.currency || "TZS"} ${Number(overview?.total_raised || 0).toLocaleString()}`, icon: "cash", color: C.pink, sub: `${overview?.total_donations || 0} campaigns` },
   ];
   const secondary = [
     { label: "Customers", value: overview?.total_customers || 0, icon: "people-outline" },
     { label: "System Users", value: overview?.total_system_users || 0, icon: "person-add-outline" },
-    { label: "Religious Leaders", value: overview?.total_leaders || 0, icon: "person-outline" },
+    { label: "Aggregators", value: overview?.total_leaders || 0, icon: "briefcase-outline" },
     { label: "Pending Approvals", value: overview?.pending_approvals || 0, icon: "checkmark-circle-outline" },
   ];
 
@@ -944,38 +967,6 @@ function NavRow({ node, active, indent, onPress }: any) {
   );
 }
 
-function FormModal({ visible, title, fields, onClose, onSave, testID }: any) {
-  return (
-    <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={styles.sheet} testID={testID}>
-          <View style={styles.handle} />
-          <Text style={styles.modalTitle}>{title}</Text>
-          {fields.map((f: any) => (
-            <View key={f.key} style={{ marginBottom: SP.sm }}>
-              <Text style={styles.fieldLabel}>{f.label}</Text>
-              <TextInput
-                testID={`${testID}-${f.key}`}
-                style={styles.input}
-                value={f.value}
-                onChangeText={f.set}
-                placeholder={f.label}
-                placeholderTextColor={C.muted}
-                autoCapitalize="none"
-              />
-            </View>
-          ))}
-          <Pressable testID={`${testID}-save`} style={styles.saveBtn} onPress={onSave}>
-            <Text style={styles.saveText}>Hifadhi</Text>
-          </Pressable>
-          <Pressable style={styles.cancelBtn} onPress={onClose}>
-            <Text style={styles.cancelText}>Ghairi</Text>
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
@@ -997,6 +988,14 @@ const styles = StyleSheet.create({
   crumb: { flexDirection: "row", alignItems: "center", marginHorizontal: SP.md, paddingVertical: SP.sm },
   crumbText: { color: C.violet, fontWeight: "700", fontSize: 13 },
   crumbCur: { color: C.sub, fontWeight: "700", fontSize: 13 },
+  subTabs: { flexDirection: "row", flexWrap: "wrap", gap: SP.sm, marginBottom: SP.md },
+  subTab: { paddingHorizontal: SP.md, height: 34, borderRadius: 9999, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
+  subTabOn: { backgroundColor: C.violet, borderColor: C.violet },
+  subTabText: { color: C.sub, fontWeight: "700", fontSize: 12 },
+  hlRow: { flexDirection: "row", gap: SP.sm, marginBottom: SP.sm },
+  hlCard: { flex: 1, backgroundColor: C.cardAlt, borderRadius: 10, padding: SP.sm, borderWidth: 1, alignItems: "center" },
+  hlLabel: { color: C.muted, fontSize: 9, fontWeight: "800", letterSpacing: 0.5 },
+  hlValue: { fontSize: 18, fontWeight: "900", marginTop: 4 },
 
   pageTitle: { color: C.text, fontSize: 24, fontWeight: "800" },
   pageSub: { color: C.muted, fontSize: 12, marginTop: 2, marginBottom: SP.md },

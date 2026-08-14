@@ -39,7 +39,7 @@ export default function Bible() {
       title: `${chapter.book_name} ${chapter.chapter}`,
       audio_url: chapter.audio_url,
       thumbnail: undefined,
-      artist_name: "Biblia Takatifu",
+      artist_name: "Vitabu",
     });
   };
 
@@ -109,7 +109,7 @@ export default function Bible() {
   const filtered = books.filter((b) => b.testament === tab);
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <Text style={styles.h1}>Biblia Takatifu</Text>
+      <Text style={styles.h1}>Vitabu</Text>
       <View style={styles.segment}>
         <Pressable testID="bible-old" style={[styles.segBtn, tab === "old" && styles.segActive]} onPress={() => setTab("old")}>
           <Text style={[styles.segText, tab === "old" && styles.segTextActive]}>Agano la Kale</Text>

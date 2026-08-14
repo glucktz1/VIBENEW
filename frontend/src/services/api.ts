@@ -31,6 +31,10 @@ export const api = {
   get: <T>(p: string) => request<T>(p),
   post: <T>(p: string, body?: any) =>
     request<T>(p, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
+  put: <T>(p: string, body?: any) =>
+    request<T>(p, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
+  patch: <T>(p: string, body?: any) =>
+    request<T>(p, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
   del: <T>(p: string) => request<T>(p, { method: "DELETE" }),
 };
 
@@ -84,9 +88,16 @@ export const billingApi = {
 export const adminApi = {
   stats: () => api.get<any>("/admin/stats"),
   users: () => api.get<any[]>("/admin/users"),
+  albums: () => api.get<any[]>("/admin/albums"),
   createAlbum: (b: any) => api.post<any>("/admin/albums", b),
+  updateAlbum: (id: string, b: any) => api.put<any>(`/admin/albums/${id}`, b),
+  albumStatus: (id: string, status: string) => api.patch<any>(`/admin/albums/${id}/status`, { status }),
+  deleteAlbum: (id: string) => api.del(`/admin/albums/${id}`),
   createSong: (b: any) => api.post<any>("/admin/songs", b),
   deleteSong: (id: string) => api.del(`/admin/songs/${id}`),
+  categories: () => api.get<any[]>("/admin/categories"),
+  createCategory: (b: any) => api.post<any>("/admin/categories", b),
+  deleteCategory: (id: string) => api.del(`/admin/categories/${id}`),
   playsAnalytics: () => api.get<any>("/admin/analytics/plays"),
   // Gracefy dashboard analytics
   overview: () => api.get<any>("/analytics/overview"),
@@ -99,4 +110,5 @@ export const adminApi = {
   revenueOverview: () => api.get<any>("/analytics/revenue-overview"),
   transactions: (status = "all", q = "") => api.get<any>(`/analytics/transactions?status=${status}&q=${encodeURIComponent(q)}`),
   locationOverview: () => api.get<any>("/analytics/location-overview"),
+  dataUsage: (days = 30) => api.get<any>(`/analytics/data-usage?days=${days}`),
 };

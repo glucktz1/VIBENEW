@@ -127,3 +127,15 @@
 - Artist portal screens: /artist/login, /artist/register, /artist (dashboard: overview earnings, music upload, withdrawals, profile)
 - Entry point on Profile: "Artist Portal" (profile-artist)
 - Uses expo-document-picker for audio; platform-aware multipart upload
+
+## Session 11 (Aug 14, 2026) — Content Management + Categories + Analytics Data Usage + Rebrand
+### Backend
+- admin.py: GET /api/admin/albums (all incl inactive), PUT /api/admin/albums/{id}, PATCH /api/admin/albums/{id}/status, extended create_album (countries, release_date, artist_id, status, tags, category)
+- Categories CRUD: GET/POST/DELETE /api/admin/categories
+- analytics.py: GET /api/analytics/data-usage?days=30 (total_data_gb, streaming_gb, downloads_gb, listening_minutes, per_day[], minutes_per_day[])
+- seed: 8 general music categories (New Releases, Trending, Afrobeat, Bongo Flava, R&B/Soul, Gospel, Reggae, Live Sessions); religious categories removed
+### Frontend
+- New components: src/components/admin/ContentManager.tsx (Albums & Songs: search, category+monetization filters, list w/ thumbnails+badges+tags, 3-dot actions Edit/Manage Tags/Deactivate/Delete, rich Create/Edit Album form), CategoriesManager.tsx (add/delete categories)
+- admin content tab now uses ContentManager; new categories tab uses CategoriesManager
+- Analytics tab: sub-tabs Overview | Data Usage; highlight cards (Paid Plays/Free Listens/Conversion); count cards (Albums/Songs/Artists/Users); Data Usage charts
+- Rebrand: sidebar Podcasts/Books/Categories, Churches→Production Houses, Religious Leaders→Aggregators; consumer: bible tab→"Vitabu", home quick links → Podcasts/Vitabu/Studio, /podcasts screen added, Neno la Leo removed

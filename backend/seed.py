@@ -116,6 +116,19 @@ async def seed():
     except Exception:
         pass
 
+    # ---- default music categories (general, non-religious) ----
+    if await db.categories.count_documents({}) == 0:
+        default_cats = [
+            ("Hip Hop", "#8b5cf6"), ("R&B", "#ec4899"), ("Bongo Hits", "#f59e0b"),
+            ("Gospel", "#10b981"), ("Amapiano", "#3b82f6"), ("Taarabu", "#ef4444"),
+            ("Za Kale", "#22c55e"), ("Afrobeat", "#a855f7"),
+        ]
+        import uuid as _uuid
+        await db.categories.insert_many([
+            {"category_id": f"cat_{_uuid.uuid4().hex[:8]}", "name": n, "color": c, "created_at": now_utc()}
+            for n, c in default_cats
+        ])
+
     if await db.albums.count_documents({}) > 0:
         print("Content already seeded; skipping content seed.")
         return

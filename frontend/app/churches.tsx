@@ -76,7 +76,7 @@ export default function Churches() {
         <Pressable testID="churches-back" onPress={() => router.back()} hitSlop={10}>
           <Ionicons name="chevron-back" size={26} color={COLORS.text} />
         </Pressable>
-        <Text style={styles.h1}>Makanisa</Text>
+        <Text style={styles.h1}>Studio</Text>
         <View style={{ width: 26 }} />
       </View>
 
