@@ -147,3 +147,10 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 
 ## Notes
 - Payment is SIMULATED (no real Azam Pay). Background/lock-screen audio & offline downloads require a native build (not testable in Expo Go/web).
+
+## Session 16 (Jun 2026, fork) — Analytics landing page finalized
+- Fixed incomplete injection: declared `aPeriod` state (7/30/90 Days, 1 Year) + added missing live-banner styles (liveBar/liveLabel/liveStat/liveMuted) in app/admin/index.tsx
+- Wired period chips → refetch via adminApi.enhanced(period); dedicated useEffect on [aPeriod, tab]
+- api.ts: enhanced(period="30d") now passes ?period=
+- backend analytics.py: /enhanced now applies real time-window filter (play_events + transactions by created_at >= now-days) instead of echoing period
+- Verified: all periods return 200; Analytics tab renders LIVE banner + filter chips (screenshot), no crash

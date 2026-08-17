@@ -144,6 +144,7 @@ export default function AdminDashboard() {
   const [location, setLocation] = useState<any>(null);
   const [txStatus, setTxStatus] = useState("all");
   const [analyticsSub, setAnalyticsSub] = useState<"overview" | "datausage">("overview");
+  const [aPeriod, setAPeriod] = useState<"7 Days" | "30 Days" | "90 Days" | "1 Year">("30 Days");
   const [dataUsage, setDataUsage] = useState<any>(null);
   const pollRef = useRef<any>(null);
 
@@ -186,12 +187,18 @@ export default function AdminDashboard() {
   // lazy-load heavier analytics screens on demand
   useEffect(() => {
     if (!isAdmin) return;
-    if (tab === "analytics" && !enhanced) adminApi.enhanced().then(setEnhanced).catch(() => {});
     if (tab === "revenue" && !revenue) adminApi.revenueOverview().then(setRevenue).catch(() => {});
     if (tab === "location" && !location) adminApi.locationOverview().then(setLocation).catch(() => {});
     if (tab === "transactions") adminApi.transactions(txStatus).then(setTxns).catch(() => {});
     if (tab === "analytics" && analyticsSub === "datausage" && !dataUsage) adminApi.dataUsage(30).then(setDataUsage).catch(() => {});
-  }, [tab, txStatus, isAdmin, enhanced, revenue, location, analyticsSub, dataUsage]);
+  }, [tab, txStatus, isAdmin, revenue, location, analyticsSub, dataUsage]);
+
+  // fetch enhanced analytics on tab open + whenever the period filter changes
+  useEffect(() => {
+    if (!isAdmin || tab !== "analytics") return;
+    const code = ({ "7 Days": "7d", "30 Days": "30d", "90 Days": "90d", "1 Year": "365d" } as const)[aPeriod];
+    adminApi.enhanced(code).then(setEnhanced).catch(() => {});
+  }, [aPeriod, tab, isAdmin]);
 
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(""), 2200); };
 
@@ -441,6 +448,22 @@ export default function AdminDashboard() {
               <View>
                 <Text style={styles.pageTitle}>Analytics Dashboard</Text>
                 <Text style={styles.pageSub}>Comprehensive platform performance metrics</Text>
+
+                <View style={styles.liveBar}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveLabel}>Live</Text>
+                  <Text style={styles.liveStat}>  {realtime?.active_streams ?? 0} </Text><Text style={styles.liveMuted}>active streams</Text>
+                  <Text style={styles.liveMuted}>   •   </Text>
+                  <Text style={styles.liveStat}>{realtime?.active_listeners ?? 0} </Text><Text style={styles.liveMuted}>listeners now</Text>
+                </View>
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: SP.md }}>
+                  {["7 Days", "30 Days", "90 Days", "1 Year"].map((p) => (
+                    <Pressable key={p} testID={`period-${p}`} style={[styles.filterChip, aPeriod === p && styles.filterChipActive]} onPress={() => setAPeriod(p)}>
+                      <Text style={[styles.filterChipText, aPeriod === p && { color: "#fff" }]}>{p}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
 
                 <View style={styles.subTabs}>
                   {([["overview", "Overview"], ["datausage", "Data Usage"]] as const).map(([k, l]) => (
@@ -1032,6 +1055,10 @@ const styles = StyleSheet.create({
   bannerRowWrap: { flexDirection: "row", alignItems: "center", flexWrap: "wrap" },
   bannerAccent: { fontWeight: "700", fontSize: 13, marginRight: 6 },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.emerald, marginRight: 6 },
+  liveBar: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingVertical: 10, paddingHorizontal: SP.md, marginBottom: SP.md },
+  liveLabel: { color: C.emerald, fontWeight: "800", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5 },
+  liveStat: { color: C.text, fontWeight: "800", fontSize: 14 },
+  liveMuted: { color: C.muted, fontSize: 12 },
   metric: { color: C.sub, fontSize: 12, marginRight: 4 },
   metricNum: { fontWeight: "800" },
   metricDot: { color: C.muted, marginHorizontal: 4 },

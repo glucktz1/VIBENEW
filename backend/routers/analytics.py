@@ -257,14 +257,22 @@ async def _avg_song_minutes() -> float:
 
 @router.get("/enhanced")
 async def enhanced(period: str = "30d", admin: dict = Depends(require_admin)):
-    total_streams = await db.play_events.count_documents({})
-    revenue_streams = await db.play_events.count_documents({"is_guest": False})
-    listener_ids = await db.play_events.distinct("user_id", {"user_id": {"$ne": None}})
-    song_ids = await db.play_events.distinct("song_id", {"song_id": {"$ne": None}})
+    # parse period like "7d", "30d", "90d", "365d" into a time window
+    try:
+        days = int(str(period).rstrip("d"))
+    except (ValueError, AttributeError):
+        days = 30
+    start = datetime.now(timezone.utc) - timedelta(days=days)
+    time_filter = {"created_at": {"$gte": start}}
+
+    total_streams = await db.play_events.count_documents(time_filter)
+    revenue_streams = await db.play_events.count_documents({**time_filter, "is_guest": False})
+    listener_ids = await db.play_events.distinct("user_id", {**time_filter, "user_id": {"$ne": None}})
+    song_ids = await db.play_events.distinct("song_id", {**time_filter, "song_id": {"$ne": None}})
     avg_min = await _avg_song_minutes()
     total_hours = round(total_streams * avg_min / 60.0, 1)
 
-    txns = await db.transactions.find({"status": "completed"}, {"_id": 0, "amount": 1}).to_list(10000)
+    txns = await db.transactions.find({"status": "completed", "created_at": {"$gte": start}}, {"_id": 0, "amount": 1}).to_list(10000)
     gross = sum(t.get("amount", 0) for t in txns)
 
     top = await db.songs.find({}, {"_id": 0, "title": 1, "plays": 1, "artist_name": 1}).sort("plays", -1).limit(8).to_list(8)
