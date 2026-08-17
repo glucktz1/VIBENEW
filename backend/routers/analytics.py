@@ -500,3 +500,84 @@ async def breakdown(admin: dict = Depends(require_admin)):
         "replays": {"top": [{"title": s.get("title"), "plays": s.get("plays", 0)} for s in top_replays]},
     }
 
+
+@router.get("/device-distribution")
+async def device_distribution(admin: dict = Depends(require_admin)):
+    """Detailed device & platform distribution — faithful port of Gracefy's endpoint."""
+    users = await db.users.find(
+        {},
+        {"_id": 0, "device_info": 1, "device_type": 1, "platform": 1,
+         "device_model": 1, "device_manufacturer": 1, "os_version": 1,
+         "location": 1, "country": 1, "city": 1},
+    ).to_list(50000)
+
+    platform_stats = {"android": 0, "ios": 0, "web": 0, "unknown": 0}
+    manufacturer_stats: dict = {}
+    model_stats: dict = {}
+    location_stats: dict = {}
+    os_version_stats: dict = {}
+
+    for user in users:
+        platform = (user.get("platform") or user.get("device_type") or "unknown").lower()
+        if "android" in platform:
+            platform_stats["android"] += 1
+        elif "ios" in platform or "iphone" in platform or "ipad" in platform:
+            platform_stats["ios"] += 1
+        elif "web" in platform:
+            platform_stats["web"] += 1
+        else:
+            platform_stats["unknown"] += 1
+
+        device_info = user.get("device_info", {}) or {}
+        manufacturer = (
+            user.get("device_manufacturer")
+            or device_info.get("manufacturer")
+            or device_info.get("brand")
+            or "Unknown"
+        ).strip().title()
+        low = manufacturer.lower()
+        for key in ("samsung", "apple", "huawei", "xiaomi", "oppo", "vivo", "tecno", "infinix", "itel"):
+            if key in low:
+                manufacturer = "Apple" if key == "apple" else key.title()
+                break
+        manufacturer_stats[manufacturer] = manufacturer_stats.get(manufacturer, 0) + 1
+
+        model = (
+            user.get("device_model")
+            or device_info.get("model")
+            or device_info.get("modelName")
+            or "Unknown"
+        ).strip()
+        if model and model != "Unknown":
+            model_key = f"{manufacturer} {model}"
+            model_stats[model_key] = model_stats.get(model_key, 0) + 1
+
+        os_ver = (
+            user.get("os_version")
+            or device_info.get("osVersion")
+            or device_info.get("systemVersion")
+            or "Unknown"
+        )
+        os_version_stats[os_ver] = os_version_stats.get(os_ver, 0) + 1
+
+        location = user.get("location") or user.get("country") or user.get("city") or "Unknown"
+        if isinstance(location, dict):
+            location = location.get("country") or location.get("name") or location.get("city") or "Unknown"
+        if not isinstance(location, str):
+            location = str(location) if location else "Unknown"
+        location_stats[location] = location_stats.get(location, 0) + 1
+
+    top_manufacturers = sorted(manufacturer_stats.items(), key=lambda x: x[1], reverse=True)[:15]
+    top_models = sorted(model_stats.items(), key=lambda x: x[1], reverse=True)[:20]
+    top_locations = sorted(location_stats.items(), key=lambda x: x[1], reverse=True)[:15]
+    top_os_versions = sorted(os_version_stats.items(), key=lambda x: x[1], reverse=True)[:10]
+
+    return {
+        "total_users": len(users),
+        "platform_distribution": platform_stats,
+        "manufacturer_distribution": dict(top_manufacturers),
+        "top_device_models": dict(top_models),
+        "location_distribution": dict(top_locations),
+        "os_version_distribution": dict(top_os_versions),
+    }
+

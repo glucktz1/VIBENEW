@@ -231,7 +231,7 @@ export default function ContentManager({ onToast }: { onToast: (m: string) => vo
         const expanded = expandedId === a.album_id;
         const songs = songsByAlbum[a.album_id] || [];
         return (
-          <View key={a.album_id} style={[styles.rowWrap, a.status === "inactive" && { opacity: 0.6 }]}>
+          <View key={a.album_id} style={[styles.rowWrap, a.status === "inactive" && { opacity: 0.6 }, menuFor === a.album_id && styles.rowWrapActive]}>
           <View style={styles.row}>
             <Pressable onPress={() => toggleExpand(a)} hitSlop={6}><Ionicons name={expanded ? "chevron-down" : "chevron-forward"} size={18} color={C.muted} /></Pressable>
             <Image source={{ uri: a.thumbnail || "https://picsum.photos/seed/vibe/200" }} style={styles.thumb} />
@@ -541,6 +541,7 @@ const styles = StyleSheet.create({
   count: { color: C.sub, fontSize: 12, fontWeight: "700", marginBottom: SP.sm },
   row: { flexDirection: "row", alignItems: "center", backgroundColor: C.cardAlt, borderRadius: 12, padding: SP.sm, borderWidth: 1, borderColor: C.border },
   rowWrap: { marginBottom: SP.sm },
+  rowWrapActive: { zIndex: 1000, elevation: 1000 },
   songsBox: { backgroundColor: "rgba(24,24,27,0.4)", borderRadius: 10, borderWidth: 1, borderColor: C.border, borderTopWidth: 0, marginTop: -6, paddingTop: 12, padding: SP.sm },
   songRow: { flexDirection: "row", alignItems: "center", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "rgba(39,39,42,0.5)", gap: 10 },
   songNum: { color: C.muted, fontSize: 12, width: 18, textAlign: "center" },

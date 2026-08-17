@@ -168,3 +168,17 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - Replays: most replayed songs list (/analytics/breakdown)
 - Devices: device distribution pie (/analytics/breakdown; currently mostly UNKNOWN until device_type captured)
 - All endpoints verified returning valid data; screenshot confirms 7 sub-tabs render + Users tab operational
+
+## Session 16c — Content menu bug fix + Devices analytics parity (Gracefy /tmp/Gracefy2)
+### CRITICAL BUG FIX (Content Management — desktop web)
+- Root cause: album 3-dot dropdown (position:absolute) was overlapped by following album rows on RN-web; clicks on Edit/Bulk Add/Deactivate/Add Song landed on the row beneath → "doesn't work"
+- Fix: ContentManager rowWrap gets zIndex/elevation 1000 when its menu is open (styles.rowWrapActive), elevating it above sibling rows. Verified EDIT opens modal + persists in 1440px desktop.
+- This single fix restores Edit, Bulk Add (multi-upload), Activate/Deactivate, Add Song, Manage Tags, Delete
+### Devices analytics — full Gracefy parity
+- Backend: GET /api/analytics/device-distribution (ported from Gracefy backend/routes/analytics.py): platform_distribution(android/ios/web/unknown), manufacturer_distribution, top_device_models, location_distribution, os_version_distribution
+- backend/backfill_devices.py: seeded realistic device+country data on 49 users (Samsung/Tecno/Infinix/Xiaomi/Itel/Apple + TZ/UG/KE) so charts populate
+- Frontend Devices sub-tab rebuilt: 4 platform stat cards (Android/iOS/Web/Unknown %), Platform Distribution donut+legend, Device Manufacturers ranked (count+%), Top Device Models, Location Distribution. Verified.
+### STILL BASIC (not yet full Gracefy parity) — next
+- Content sub-tab: Gracefy has album performance TABLE (plays/minutes/hours/avg-per-play/revenue) + top songs list — ours shows counts+top albums only
+- Replays sub-tab: Gracefy has day/week/month period selector + users-who-replayed + summary cards — ours shows top replayed list only
+- Users sub-tab: could add navigation/section toggle from Gracefy

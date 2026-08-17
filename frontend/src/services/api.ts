@@ -145,6 +145,7 @@ export const adminApi = {
   },
   dataUsage: (days = 30) => api.get<any>(`/analytics/data-usage?days=${days}`),
   breakdown: () => api.get<any>("/analytics/breakdown"),
+  deviceDistribution: () => api.get<any>("/analytics/device-distribution"),
   settings: () => api.get<any>("/admin/settings"),
   updateSettings: (b: any) => api.put<any>("/admin/settings", b),
   campaigns: () => api.get<any>("/admin/campaigns"),

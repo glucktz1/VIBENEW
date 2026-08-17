@@ -147,6 +147,7 @@ export default function AdminDashboard() {
   const [aPeriod, setAPeriod] = useState<"7 Days" | "30 Days" | "90 Days" | "1 Year">("30 Days");
   const [dataUsage, setDataUsage] = useState<any>(null);
   const [breakdown, setBreakdown] = useState<any>(null);
+  const [deviceDist, setDeviceDist] = useState<any>(null);
   const pollRef = useRef<any>(null);
 
   const load = useCallback(async () => {
@@ -193,8 +194,9 @@ export default function AdminDashboard() {
     if (tab === "transactions") adminApi.transactions(txStatus).then(setTxns).catch(() => {});
     if (tab === "analytics" && analyticsSub === "datausage" && !dataUsage) adminApi.dataUsage(30).then(setDataUsage).catch(() => {});
     if (tab === "analytics" && (analyticsSub === "users" || analyticsSub === "content" || analyticsSub === "replays" || analyticsSub === "devices") && !breakdown) adminApi.breakdown().then(setBreakdown).catch(() => {});
+    if (tab === "analytics" && analyticsSub === "devices" && !deviceDist) adminApi.deviceDistribution().then(setDeviceDist).catch(() => {});
     if (tab === "analytics" && analyticsSub === "revenue" && !revenue) adminApi.revenueOverview().then(setRevenue).catch(() => {});
-  }, [tab, txStatus, isAdmin, revenue, location, analyticsSub, dataUsage, breakdown]);
+  }, [tab, txStatus, isAdmin, revenue, location, analyticsSub, dataUsage, breakdown, deviceDist]);
 
   // fetch enhanced analytics on tab open + whenever the period filter changes
   useEffect(() => {
@@ -664,18 +666,69 @@ export default function AdminDashboard() {
                     </ChartCard>
                   )
                 ) : analyticsSub === "devices" ? (
-                  !breakdown ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
-                    <ChartCard icon="phone-portrait" iconColor={C.blue} title="Device Distribution" desc="Listeners by device type">
-                      {breakdown.devices.data?.length ? (
-                        <>
-                          <View style={{ alignItems: "center", marginVertical: SP.sm }}>
-                            <PieChart donut innerRadius={50} radius={85} innerCircleColor={C.card}
-                              data={breakdown.devices.data.map((d: any, i: number) => ({ value: d.value, color: PIE_COLORS[i % PIE_COLORS.length] }))} />
+                  !deviceDist ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
+                    <>
+                      <Text style={styles.secHdr}>Device &amp; Platform Distribution</Text>
+                      <View style={styles.statGrid}>
+                        {(() => {
+                          const pd = deviceDist.platform_distribution || {};
+                          const tot = deviceDist.total_users || 1;
+                          return [
+                            { l: "Android Users", v: pd.android || 0, s: `${(((pd.android || 0) / tot) * 100).toFixed(1)}%`, c: C.emerald, i: "logo-android" },
+                            { l: "iOS Users", v: pd.ios || 0, s: `${(((pd.ios || 0) / tot) * 100).toFixed(1)}%`, c: C.blue, i: "logo-apple" },
+                            { l: "Web Users", v: pd.web || 0, s: `${(((pd.web || 0) / tot) * 100).toFixed(1)}%`, c: C.violet, i: "desktop" },
+                            { l: "Unknown Platform", v: pd.unknown || 0, s: "Needs device tracking", c: C.muted, i: "help-circle" },
+                          ];
+                        })().map((s, i) => (
+                          <View key={i} style={styles.statCard}>
+                            <View style={[styles.statIcon, { backgroundColor: s.c + "22" }]}><Ionicons name={s.i as any} size={20} color={s.c} /></View>
+                            <Text style={styles.statValue} numberOfLines={1}>{s.v}</Text>
+                            <Text style={styles.statLabel}>{s.l}</Text>
+                            <Text style={styles.statSub}>{s.s}</Text>
                           </View>
-                          <Legend items={breakdown.devices.data.map((d: any, i: number) => ({ c: PIE_COLORS[i % PIE_COLORS.length], t: `${d.name} (${d.value})` }))} />
-                        </>
-                      ) : <Empty />}
-                    </ChartCard>
+                        ))}
+                      </View>
+
+                      <ChartCard icon="pie-chart" iconColor={C.blue} title="Platform Distribution">
+                        {Object.values(deviceDist.platform_distribution || {}).some((v: any) => v > 0) ? (
+                          <>
+                            <View style={{ alignItems: "center", marginVertical: SP.sm }}>
+                              <PieChart donut innerRadius={50} radius={85} innerCircleColor={C.card}
+                                data={Object.entries(deviceDist.platform_distribution || {}).map(([, v]: any, i: number) => ({ value: v, color: PIE_COLORS[i % PIE_COLORS.length] }))} />
+                            </View>
+                            <Legend items={Object.entries(deviceDist.platform_distribution || {}).map(([k, v]: any, i: number) => ({ c: PIE_COLORS[i % PIE_COLORS.length], t: `${k.charAt(0).toUpperCase() + k.slice(1)} (${v})` }))} />
+                          </>
+                        ) : <Empty />}
+                      </ChartCard>
+
+                      <ChartCard icon="phone-portrait" iconColor={C.emerald} title="Device Manufacturers">
+                        {Object.keys(deviceDist.manufacturer_distribution || {}).length ? Object.entries(deviceDist.manufacturer_distribution).map(([name, count]: any, i: number) => (
+                          <View key={name} style={styles.rankRow}>
+                            <Text style={styles.locRank}>{i + 1}.</Text>
+                            <Text style={styles.locName} numberOfLines={1}>{name}</Text>
+                            <Text style={styles.devVal}>{count}  ·  {(((count as number) / (deviceDist.total_users || 1)) * 100).toFixed(1)}%</Text>
+                          </View>
+                        )) : <Empty />}
+                      </ChartCard>
+
+                      <ChartCard icon="hardware-chip" iconColor={C.amber} title="Top Device Models">
+                        {Object.keys(deviceDist.top_device_models || {}).length ? Object.entries(deviceDist.top_device_models).map(([model, count]: any) => (
+                          <View key={model} style={styles.rankRow}>
+                            <Text style={styles.locName} numberOfLines={1}>{model}</Text>
+                            <Text style={styles.devVal}>{count}</Text>
+                          </View>
+                        )) : <Empty />}
+                      </ChartCard>
+
+                      <ChartCard icon="globe" iconColor={C.blue} title="Location Distribution">
+                        {Object.keys(deviceDist.location_distribution || {}).length ? Object.entries(deviceDist.location_distribution).map(([loc, count]: any) => (
+                          <View key={loc} style={styles.rankRow}>
+                            <Text style={styles.locName} numberOfLines={1}>{loc}</Text>
+                            <Text style={styles.devVal}>{count}</Text>
+                          </View>
+                        )) : <Empty />}
+                      </ChartCard>
+                    </>
                   )
                 ) : (
                   !dataUsage ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
@@ -1206,6 +1259,8 @@ const styles = StyleSheet.create({
   statValue: { color: C.text, fontSize: 22, fontWeight: "800", marginTop: SP.sm },
   statLabel: { color: C.sub, fontSize: 13, marginTop: 2 },
   statSub: { color: C.muted, fontSize: 11, marginTop: 2 },
+  secHdr: { color: C.text, fontSize: 15, fontWeight: "800", marginBottom: SP.sm },
+  devVal: { color: C.sub, fontSize: 12, fontWeight: "700", marginLeft: 8 },
 
   secGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginTop: SP.xs, marginBottom: SP.md },
   secCard: { width: "48.5%", backgroundColor: "rgba(24,24,27,0.4)", borderRadius: 10, padding: SP.md, marginBottom: SP.sm, borderWidth: 1, borderColor: "rgba(39,39,42,0.5)" },
