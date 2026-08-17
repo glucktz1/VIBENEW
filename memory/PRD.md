@@ -205,3 +205,10 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - admin/index.tsx: Content sub-tab now shows Album Performance TABLE + Top Performing Songs; Replays sub-tab has Today/Week/Month selector + summary cards + Users Who Replayed + Most Replayed Songs; new styles (tbl*, songMeta, replayBadge)
 - Verified in 1440px desktop: both render with real data; replay period switch works
 - ALL requested items this thread DONE: Content parity ✅ Replays parity ✅ Real device capture ✅ Customers list + User detail ✅ removed Content Users toggle ✅
+
+## Session 16f — Admin enrollment of subscribers (plans / free hours + bulk + audit)
+- Backend admin.py: POST /admin/enroll (mode=plan|free_hours; targets via user_ids and/or bulk phones; duration_days or free_hours+free_period). Applies subscription to matched users (is_premium+subscription{granted_by,expires_at,type}); unmatched phones stored in db.pending_enrollments. POST records saved to db.enrollments (audit: admin_email, plan_name, applied/pending/total counts, targets, created_at). GET /admin/enrollments lists records.
+- api.ts: enroll(body), enrollments()
+- UsersManager: per-row checkboxes, header Enroll(+count)/History buttons; EnrollModal (plan vs free-hours, bulk phone textarea, duration presets Daily/3 Days/Weekly/Monthly, free hours + per day/week/month); Enrollment Records history view
+- Verified backend (plan applied+pending, free_hours applied, list) and UI (modal + history render; premium count 16→17)
+- NOTE: free-listening-hours entitlement is stored on user (free_listening_hours/period/expires); player-side enforcement of the hour cap is a future task

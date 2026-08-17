@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, TextInput, Image } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, TextInput, Image, Modal, KeyboardAvoidingView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { adminApi } from "@/src/services/api";
 import { C, SP } from "./adminTheme";
@@ -26,6 +26,10 @@ export default function UsersManager({ onToast }: { onToast: (m: string) => void
   const [fRegister, setFRegister] = useState("all");
   const [fStatus, setFStatus] = useState("all");
   const [selected, setSelected] = useState<string | null>(null);
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [showEnroll, setShowEnroll] = useState(false);
+  const [view, setView] = useState<"list" | "history">("list");
+  const [history, setHistory] = useState<any[] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -40,6 +44,9 @@ export default function UsersManager({ onToast }: { onToast: (m: string) => void
 
   if (selected) return <UserDetail userId={selected} onBack={() => { setSelected(null); load(); }} onToast={onToast} />;
 
+  const selectedIds = Object.keys(checked).filter((k) => checked[k]);
+  const openHistory = async () => { setView("history"); setHistory(await adminApi.enrollments().catch(() => [])); };
+
   const statCards = [
     { l: "Total Users", v: stats?.total_users ?? 0, i: "people", c: C.violet, big: true },
     { l: "Active", v: stats?.active ?? 0, i: "checkmark-circle", c: C.emerald },
@@ -51,9 +58,38 @@ export default function UsersManager({ onToast }: { onToast: (m: string) => void
 
   return (
     <View>
-      <Text style={styles.title}>Customers</Text>
-      <Text style={styles.sub}>Manage {stats?.total_users ?? 0} registered users</Text>
+      <View style={styles.headRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Customers</Text>
+          <Text style={styles.sub}>Manage {stats?.total_users ?? 0} registered users</Text>
+        </View>
+        {view === "list" ? (
+          <View style={styles.headActions}>
+            <Pressable testID="users-history-btn" style={styles.ghostBtn} onPress={openHistory}><Ionicons name="time-outline" size={15} color={C.text} /><Text style={styles.ghostTxt}>History</Text></Pressable>
+            <Pressable testID="users-enroll-btn" style={styles.primaryBtn} onPress={() => setShowEnroll(true)}><Ionicons name="add-circle" size={16} color="#fff" /><Text style={styles.primaryTxt}>Enroll{selectedIds.length ? ` (${selectedIds.length})` : ""}</Text></Pressable>
+          </View>
+        ) : (
+          <Pressable testID="users-history-back" style={styles.ghostBtn} onPress={() => setView("list")}><Ionicons name="chevron-back" size={15} color={C.violet} /><Text style={[styles.ghostTxt, { color: C.violet }]}>Back to Users</Text></Pressable>
+        )}
+      </View>
 
+      {view === "history" ? (
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Enrollment Records</Text>
+          {!history ? <ActivityIndicator color={C.violet} /> : history.length === 0 ? <Text style={styles.emptySm}>No enrollments yet.</Text> :
+            history.map((h) => (
+              <View key={h.enrollment_id} style={styles.histRow}>
+                <View style={[styles.statIcon, { backgroundColor: (h.mode === "plan" ? C.violet : C.emerald) + "22" }]}><Ionicons name={h.mode === "plan" ? "card" : "time"} size={16} color={h.mode === "plan" ? C.violet : C.emerald} /></View>
+                <View style={{ flex: 1, marginLeft: SP.sm }}>
+                  <Text style={styles.lrTitle}>{h.plan_name}</Text>
+                  <Text style={styles.lrSub} numberOfLines={1}>by {h.admin_email} · {h.applied_count}/{h.total_count} applied{h.pending_count ? ` · ${h.pending_count} pending` : ""}</Text>
+                </View>
+                <Text style={styles.lrMeta}>{fmtDate(h.created_at)}</Text>
+              </View>
+            ))}
+        </View>
+      ) : (
+      <>
       <View style={styles.statRow}>
         {statCards.map((s, i) => (
           <View key={i} style={styles.statCard}>
@@ -88,9 +124,22 @@ export default function UsersManager({ onToast }: { onToast: (m: string) => void
               <Text style={[styles.th, { width: 90 }]}>STATUS</Text>
               <Text style={[styles.th, { width: 70 }]}>ACTIONS</Text>
             </View>
+            <View style={styles.thead}>
+              <Text style={[styles.th, { width: 36 }]}> </Text>
+              <Text style={[styles.th, { width: 150 }]}>USER ID</Text>
+              <Text style={[styles.th, { width: 230 }]}>EMAIL / MOBILE</Text>
+              <Text style={[styles.th, { width: 90 }]}>TYPE</Text>
+              <Text style={[styles.th, { width: 110 }]}>COUNTRY</Text>
+              <Text style={[styles.th, { width: 110 }]}>REGISTER BY</Text>
+              <Text style={[styles.th, { width: 90 }]}>STATUS</Text>
+              <Text style={[styles.th, { width: 70 }]}>ACTIONS</Text>
+            </View>
             {rows.map((u) => (
-              <Pressable key={u.user_id} testID={`user-row-${u.user_id}`} style={styles.trow} onPress={() => setSelected(u.user_id)}>
-                <Text style={[styles.td, styles.tdId, { width: 150 }]} numberOfLines={1}>{u.name || u.user_id}</Text>
+              <View key={u.user_id} style={styles.trow}>
+                <Pressable testID={`user-check-${u.user_id}`} style={{ width: 36 }} onPress={() => setChecked((c) => ({ ...c, [u.user_id]: !c[u.user_id] }))} hitSlop={8}>
+                  <Ionicons name={checked[u.user_id] ? "checkbox" : "square-outline"} size={18} color={checked[u.user_id] ? C.violet : C.muted} />
+                </Pressable>
+                <Pressable testID={`user-row-${u.user_id}`} style={{ width: 150 }} onPress={() => setSelected(u.user_id)}><Text style={[styles.td, styles.tdId]} numberOfLines={1}>{u.name || u.user_id}</Text></Pressable>
                 <Text style={[styles.td, { width: 230 }]} numberOfLines={1}>
                   <Text style={styles.ccTag}>{cc(u.country)} </Text>{u.phone || u.email}
                 </Text>
@@ -98,13 +147,16 @@ export default function UsersManager({ onToast }: { onToast: (m: string) => void
                 <Text style={[styles.td, { width: 110 }]} numberOfLines={1}>{u.country}</Text>
                 <Text style={[styles.td, { width: 110 }]} numberOfLines={1}>{u.register_by}</Text>
                 <View style={{ width: 90 }}><Text style={[styles.status, { color: u.status === "active" ? C.emerald : C.red }]}>{u.status === "active" ? "Active" : "Suspended"}</Text></View>
-                <View style={{ width: 70 }}><Ionicons name="chevron-forward" size={18} color={C.muted} /></View>
-              </Pressable>
+                <Pressable style={{ width: 70 }} onPress={() => setSelected(u.user_id)}><Ionicons name="chevron-forward" size={18} color={C.muted} /></Pressable>
+              </View>
             ))}
             {rows.length === 0 ? <Text style={styles.empty}>No users match your filters.</Text> : null}
           </View>
         </ScrollView>
       )}
+      </>
+      )}
+      <EnrollModal visible={showEnroll} onClose={() => setShowEnroll(false)} selectedIds={selectedIds} onToast={onToast} onDone={() => { setShowEnroll(false); setChecked({}); load(); }} />
     </View>
   );
 }
@@ -286,8 +338,83 @@ function UserDetail({ userId, onBack, onToast }: { userId: string; onBack: () =>
   );
 }
 
-const FilterGroup = ({ label, value, opts, onPick }: any) => (
-  <View style={{ flexDirection: "row", marginRight: SP.md }}>
+const DURATIONS: [string, number, string][] = [["Daily", 1, "daily"], ["3 Days", 3, "3days"], ["Weekly", 7, "weekly"], ["Monthly", 30, "monthly"]];
+
+function EnrollModal({ visible, onClose, selectedIds, onToast, onDone }: { visible: boolean; onClose: () => void; selectedIds: string[]; onToast: (m: string) => void; onDone: () => void }) {
+  const [mode, setMode] = useState<"plan" | "free_hours">("plan");
+  const [durKey, setDurKey] = useState("weekly");
+  const [freeHours, setFreeHours] = useState("5");
+  const [freePeriod, setFreePeriod] = useState<"day" | "week" | "month">("week");
+  const [phones, setPhones] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async () => {
+    const phoneList = phones.split(/[\n,]/).map((p) => p.trim()).filter(Boolean);
+    if (selectedIds.length === 0 && phoneList.length === 0) { onToast("Select users or paste mobile numbers"); return; }
+    const dur = DURATIONS.find((d) => d[2] === durKey)!;
+    const body: any = { mode, user_ids: selectedIds, phones: phoneList };
+    if (mode === "plan") { body.duration_days = dur[1]; body.plan_name = dur[0]; }
+    else { body.free_hours = parseFloat(freeHours) || 0; body.free_period = freePeriod; }
+    setSubmitting(true);
+    try {
+      const res = await adminApi.enroll(body);
+      onToast(`Enrolled ${res.applied_count} user(s)${res.pending_count ? `, ${res.pending_count} pending` : ""}`);
+      setPhones("");
+      onDone();
+    } catch (e: any) { onToast(e.message); } finally { setSubmitting(false); }
+  };
+
+  return (
+    <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <View style={styles.sheet}>
+          <View style={styles.sheetHead}>
+            <Text style={styles.sheetTitle}>Enroll Subscribers</Text>
+            <Pressable testID="enroll-close" onPress={onClose} hitSlop={10}><Ionicons name="close" size={22} color={C.text} /></Pressable>
+          </View>
+          <ScrollView keyboardShouldPersistTaps="handled">
+            <View style={styles.modeRow}>
+              <Pressable testID="enroll-mode-plan" style={[styles.modeBtn, mode === "plan" && styles.modeOn]} onPress={() => setMode("plan")}><Text style={[styles.modeTxt, mode === "plan" && { color: "#fff" }]}>Subscription Plan</Text></Pressable>
+              <Pressable testID="enroll-mode-free" style={[styles.modeBtn, mode === "free_hours" && styles.modeOn]} onPress={() => setMode("free_hours")}><Text style={[styles.modeTxt, mode === "free_hours" && { color: "#fff" }]}>Free Listening Hours</Text></Pressable>
+            </View>
+
+            <Text style={styles.kLbl}>Targets</Text>
+            <Text style={styles.hintTxt}>{selectedIds.length} user(s) selected from the list. You can also paste mobile numbers below (one per line) for bulk enrollment.</Text>
+            <TextInput testID="enroll-phones" style={[styles.input, { height: 110, textAlignVertical: "top", paddingTop: 10 }]} value={phones} onChangeText={setPhones} placeholder={"+255700000001\n+255700000002"} placeholderTextColor={C.muted} multiline autoCapitalize="none" />
+
+            {mode === "plan" ? (
+              <>
+                <Text style={styles.kLbl}>Duration of Access</Text>
+                <View style={styles.wrapRow}>
+                  {DURATIONS.map(([l, , k]) => (
+                    <Pressable key={k} testID={`enroll-dur-${k}`} style={[styles.pick, durKey === k && styles.pickOn]} onPress={() => setDurKey(k)}><Text style={[styles.pickTxt, durKey === k && { color: "#fff" }]}>{l}</Text></Pressable>
+                  ))}
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.kLbl}>Free Listening Hours</Text>
+                <TextInput testID="enroll-hours" style={styles.input} value={freeHours} onChangeText={setFreeHours} keyboardType="numeric" placeholder="5" placeholderTextColor={C.muted} />
+                <Text style={styles.kLbl}>Per Period</Text>
+                <View style={styles.wrapRow}>
+                  {(["day", "week", "month"] as const).map((p) => (
+                    <Pressable key={p} testID={`enroll-period-${p}`} style={[styles.pick, freePeriod === p && styles.pickOn]} onPress={() => setFreePeriod(p)}><Text style={[styles.pickTxt, freePeriod === p && { color: "#fff" }]}>{p === "day" ? "Per Day" : p === "week" ? "Per Week" : "Per Month"}</Text></Pressable>
+                  ))}
+                </View>
+                <Text style={styles.hintTxt}>e.g. 5 hours free per week — access expires at end of the period.</Text>
+              </>
+            )}
+
+            <Pressable testID="enroll-submit" style={styles.saveBtn} onPress={submit} disabled={submitting}>{submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveTxt}>Enroll Users</Text>}</Pressable>
+            <View style={{ height: 24 }} />
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+const FilterGroup = ({ label, value, opts, onPick }: any) => (  <View style={{ flexDirection: "row", marginRight: SP.md }}>
     {opts.map(([k, l]: any) => (
       <Pressable key={k} style={[styles.fchip, value === k && styles.fchipOn]} onPress={() => onPick(k)}>
         <Text style={[styles.fchipTxt, value === k && { color: "#fff" }]}>{l}</Text>
@@ -305,6 +432,26 @@ const Field = ({ label, children }: any) => (
 const styles = StyleSheet.create({
   title: { color: C.text, fontSize: 22, fontWeight: "800" },
   sub: { color: C.muted, fontSize: 12, marginTop: 2, marginBottom: SP.md },
+  headRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: SP.sm, flexWrap: "wrap", gap: SP.sm },
+  headActions: { flexDirection: "row", gap: SP.sm },
+  ghostBtn: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderColor: C.border, borderRadius: 9999, paddingHorizontal: 12, height: 38 },
+  ghostTxt: { color: C.text, fontWeight: "700", fontSize: 12 },
+  primaryBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: C.violet, borderRadius: 9999, paddingHorizontal: 14, height: 38 },
+  primaryTxt: { color: "#fff", fontWeight: "800", fontSize: 12 },
+  histRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "rgba(39,39,42,0.5)" },
+  hintTxt: { color: C.muted, fontSize: 11, marginBottom: 6, lineHeight: 15 },
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
+  sheet: { backgroundColor: C.card, borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: SP.lg, maxHeight: "92%" },
+  sheetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: SP.sm },
+  sheetTitle: { color: C.text, fontSize: 18, fontWeight: "800" },
+  modeRow: { flexDirection: "row", gap: SP.sm, marginBottom: SP.md },
+  modeBtn: { flex: 1, height: 40, borderRadius: 8, backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
+  modeOn: { backgroundColor: C.violet, borderColor: C.violet },
+  modeTxt: { color: C.sub, fontWeight: "700", fontSize: 12 },
+  wrapRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: SP.sm },
+  pick: { paddingHorizontal: 14, height: 38, borderRadius: 8, backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
+  pickOn: { backgroundColor: C.violet, borderColor: C.violet },
+  pickTxt: { color: C.sub, fontWeight: "700", fontSize: 12 },
   statRow: { flexDirection: "row", flexWrap: "wrap", gap: SP.sm, marginBottom: SP.md },
   statCard: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.cardAlt, borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingVertical: 12, paddingHorizontal: SP.md, minWidth: 150, flexGrow: 1 },
   statIcon: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },

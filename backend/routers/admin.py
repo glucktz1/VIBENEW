@@ -10,6 +10,7 @@ from auth_utils import require_admin
 from storage import put_object, get_object, APP_NAME
 from bson import ObjectId
 from bson.errors import InvalidId
+from datetime import timedelta
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -539,6 +540,125 @@ async def reset_user(user_id: str, admin: dict = Depends(require_admin)):
         "skip_count": 0,
     }})
     return {"ok": True}
+
+
+# -------- Admin subscription / free-hours enrollment --------
+DURATION_PRESETS = {"daily": 1, "3days": 3, "weekly": 7, "monthly": 30}
+
+
+class EnrollIn(BaseModel):
+    mode: str                              # "plan" | "free_hours"
+    user_ids: List[str] = []
+    phones: List[str] = []
+    duration_days: Optional[int] = None    # plan mode
+    plan_name: Optional[str] = None        # plan mode label (e.g. "Weekly")
+    free_hours: Optional[float] = None     # free_hours mode
+    free_period: Optional[str] = None      # "day" | "week" | "month"
+
+
+@router.post("/enroll")
+async def enroll_users(body: EnrollIn, admin: dict = Depends(require_admin)):
+    if body.mode not in ("plan", "free_hours"):
+        raise HTTPException(status_code=400, detail="Invalid mode")
+
+    # resolve duration window
+    period_days = {"day": 1, "week": 7, "month": 30}
+    if body.mode == "plan":
+        days = body.duration_days or 7
+    else:
+        if not body.free_hours or body.free_hours <= 0:
+            raise HTTPException(status_code=400, detail="free_hours required")
+        days = period_days.get((body.free_period or "week"), 7)
+    expires_at = now_utc() + timedelta(days=days)
+
+    # build subscription payload
+    if body.mode == "plan":
+        sub = {
+            "plan_name": body.plan_name or f"{days}-Day Plan",
+            "granted_by": admin.get("email"),
+            "granted_at": now_utc(),
+            "expires_at": expires_at,
+            "type": "admin_plan",
+        }
+        user_set = {"is_premium": True, "subscription": sub}
+    else:
+        sub = {
+            "plan_name": f"{body.free_hours}h free / {body.free_period or 'week'}",
+            "granted_by": admin.get("email"),
+            "granted_at": now_utc(),
+            "expires_at": expires_at,
+            "type": "free_hours",
+            "free_hours": body.free_hours,
+            "free_period": body.free_period or "week",
+        }
+        user_set = {
+            "is_premium": True,
+            "subscription": sub,
+            "free_listening_hours": body.free_hours,
+            "free_listening_period": body.free_period or "week",
+            "free_listening_expires": expires_at,
+        }
+
+    targets = []
+    applied = 0
+
+    # by explicit user_ids
+    for uid in body.user_ids:
+        u = await _find_user_by_id(uid)
+        if u:
+            await db.users.update_one({"_id": u["_id"]}, {"$set": user_set})
+            targets.append({"user_id": uid, "email": u.get("email"), "status": "applied"})
+            applied += 1
+        else:
+            targets.append({"user_id": uid, "status": "not_found"})
+
+    # by phone numbers (bulk upload) — match existing, else record pending
+    for raw in body.phones:
+        phone = str(raw).strip()
+        if not phone:
+            continue
+        u = await db.users.find_one({"phone": phone})
+        if u:
+            await db.users.update_one({"_id": u["_id"]}, {"$set": user_set})
+            targets.append({"phone": phone, "email": u.get("email"), "status": "applied"})
+            applied += 1
+        else:
+            # keep pending grant so it applies whenever this phone registers
+            await db.pending_enrollments.update_one(
+                {"phone": phone},
+                {"$set": {"phone": phone, "grant": user_set, "created_at": now_utc(), "granted_by": admin.get("email")}},
+                upsert=True,
+            )
+            targets.append({"phone": phone, "status": "pending"})
+
+    record = {
+        "enrollment_id": f"enr_{uuid.uuid4().hex[:12]}",
+        "admin_email": admin.get("email"),
+        "mode": body.mode,
+        "duration_days": days,
+        "plan_name": sub["plan_name"],
+        "free_hours": body.free_hours,
+        "free_period": body.free_period,
+        "expires_at": str(expires_at),
+        "targets": targets,
+        "applied_count": applied,
+        "pending_count": sum(1 for t in targets if t["status"] == "pending"),
+        "total_count": len(targets),
+        "created_at": now_utc(),
+    }
+    await db.enrollments.insert_one(dict(record))
+    record.pop("_id", None)
+    record["created_at"] = str(record["created_at"])
+    return record
+
+
+@router.get("/enrollments")
+async def list_enrollments(admin: dict = Depends(require_admin)):
+    rows = await db.enrollments.find({}, {"_id": 0}).sort("created_at", -1).limit(200).to_list(200)
+    for r in rows:
+        if r.get("created_at"):
+            r["created_at"] = str(r["created_at"])
+    return rows
 
 
 # -------- Plans --------
