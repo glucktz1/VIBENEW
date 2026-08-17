@@ -271,3 +271,6 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - (tabs)/index.tsx: renders artists rail (circular avatars) -> router.push(/artists/{id}); merged duplicate expo-router import; added artistCard styles
 - NEW app/artists/[id].tsx: consumer artist screen (avatar, counts, bio, "Cheza Zote" Play All -> playTrack(queue), Albums rail via AlbumCard, Popular Songs via SongRow). Note: route is plural /artists/[id] to avoid clash with artist PORTAL at /artist
 - Verified: home artists row + artist page + Play All + full player controls
+
+## Session 16l — Single-user enroll auto-detects user (no CSV/phone paste)
+- EnrollModal now takes optional `single={name,mobile}`; UserDetail passes it. In single mode: title "Enroll User", Targets shows auto-detected user chip ("<name> · <mobile>|no mobile on file"), CSV button + phones textarea hidden, submit ignores phones (targets the userId). Bulk enroll (Customers list) keeps CSV/phone paste. Verified in desktop.

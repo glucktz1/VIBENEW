@@ -430,14 +430,14 @@ function UserDetail({ userId, onBack, onToast }: { userId: string; onBack: () =>
         </View>
       ) : null}
       <View style={{ height: 40 }} />
-      <EnrollModal visible={showEnroll} onClose={() => setShowEnroll(false)} selectedIds={[userId]} onToast={onToast} onDone={() => { setShowEnroll(false); loadDetail(); }} />
+      <EnrollModal visible={showEnroll} onClose={() => setShowEnroll(false)} selectedIds={[userId]} single={{ name: detail.name, mobile: detail.mobile }} onToast={onToast} onDone={() => { setShowEnroll(false); loadDetail(); }} />
     </View>
   );
 }
 
 const DURATIONS: [string, number, string][] = [["Daily", 1, "daily"], ["3 Days", 3, "3days"], ["Weekly", 7, "weekly"], ["Monthly", 30, "monthly"]];
 
-function EnrollModal({ visible, onClose, selectedIds, onToast, onDone }: { visible: boolean; onClose: () => void; selectedIds: string[]; onToast: (m: string) => void; onDone: () => void }) {
+function EnrollModal({ visible, onClose, selectedIds, onToast, onDone, single }: { visible: boolean; onClose: () => void; selectedIds: string[]; onToast: (m: string) => void; onDone: () => void; single?: { name?: string; mobile?: string } }) {
   const [mode, setMode] = useState<"plan" | "free_hours">("plan");
   const [durKey, setDurKey] = useState("weekly");
   const [freeHours, setFreeHours] = useState("5");
@@ -458,7 +458,7 @@ function EnrollModal({ visible, onClose, selectedIds, onToast, onDone }: { visib
   };
 
   const submit = async () => {
-    const phoneList = phones.split(/[\n,]/).map((p) => p.trim()).filter(Boolean);
+    const phoneList = single ? [] : phones.split(/[\n,]/).map((p) => p.trim()).filter(Boolean);
     if (selectedIds.length === 0 && phoneList.length === 0) { onToast("Select users or paste mobile numbers"); return; }
     const dur = DURATIONS.find((d) => d[2] === durKey)!;
     const body: any = { mode, user_ids: selectedIds, phones: phoneList };
@@ -478,7 +478,7 @@ function EnrollModal({ visible, onClose, selectedIds, onToast, onDone }: { visib
       <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.sheet}>
           <View style={styles.sheetHead}>
-            <Text style={styles.sheetTitle}>Enroll Subscribers</Text>
+            <Text style={styles.sheetTitle}>{single ? "Enroll User" : "Enroll Subscribers"}</Text>
             <Pressable testID="enroll-close" onPress={onClose} hitSlop={10}><Ionicons name="close" size={22} color={C.text} /></Pressable>
           </View>
           <ScrollView keyboardShouldPersistTaps="handled">
@@ -488,12 +488,23 @@ function EnrollModal({ visible, onClose, selectedIds, onToast, onDone }: { visib
             </View>
 
             <Text style={styles.kLbl}>Targets</Text>
-            <Text style={styles.hintTxt}>{selectedIds.length} user(s) selected from the list. Paste mobile numbers below (one per line) or upload a CSV for bulk enrollment.</Text>
-            <Pressable testID="enroll-csv" style={styles.csvBtn} onPress={pickCsv}>
-              <Ionicons name="cloud-upload-outline" size={16} color={C.violet} />
-              <Text style={styles.csvTxt}>Upload CSV of mobile numbers</Text>
-            </Pressable>
-            <TextInput testID="enroll-phones" style={[styles.input, { height: 110, textAlignVertical: "top", paddingTop: 10 }]} value={phones} onChangeText={setPhones} placeholder={"+255700000001\n+255700000002"} placeholderTextColor={C.muted} multiline autoCapitalize="none" />
+            {single ? (
+              <View style={styles.singleTarget}>
+                <Ionicons name="person-circle" size={20} color={C.violet} />
+                <Text style={styles.singleTargetTxt} numberOfLines={1}>
+                  {single.name || "This user"}{single.mobile ? `  ·  ${single.mobile}` : "  ·  no mobile on file"}
+                </Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.hintTxt}>{selectedIds.length} user(s) selected from the list. Paste mobile numbers below (one per line) or upload a CSV for bulk enrollment.</Text>
+                <Pressable testID="enroll-csv" style={styles.csvBtn} onPress={pickCsv}>
+                  <Ionicons name="cloud-upload-outline" size={16} color={C.violet} />
+                  <Text style={styles.csvTxt}>Upload CSV of mobile numbers</Text>
+                </Pressable>
+                <TextInput testID="enroll-phones" style={[styles.input, { height: 110, textAlignVertical: "top", paddingTop: 10 }]} value={phones} onChangeText={setPhones} placeholder={"+255700000001\n+255700000002"} placeholderTextColor={C.muted} multiline autoCapitalize="none" />
+              </>
+            )}
 
             {mode === "plan" ? (
               <>
@@ -566,6 +577,8 @@ const styles = StyleSheet.create({
   hintTxt: { color: C.muted, fontSize: 11, marginBottom: 6, lineHeight: 15 },
   csvBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderStyle: "dashed", borderRadius: 8, height: 44, paddingHorizontal: SP.md, marginBottom: SP.sm },
   csvTxt: { color: C.violet, fontWeight: "700", fontSize: 12 },
+  singleTarget: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderRadius: 8, paddingHorizontal: SP.md, height: 46, marginBottom: SP.sm },
+  singleTargetTxt: { color: C.text, fontWeight: "700", fontSize: 13, flex: 1 },
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
   sheet: { backgroundColor: C.card, borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: SP.lg, maxHeight: "92%" },
   sheetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: SP.sm },
