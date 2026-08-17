@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, TextInput, Image, Modal, KeyboardAvoidingView, Platform } from "react-native";
+import * as DocumentPicker from "expo-document-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { adminApi } from "@/src/services/api";
 import { C, SP } from "./adminTheme";
@@ -30,6 +31,8 @@ export default function UsersManager({ onToast }: { onToast: (m: string) => void
   const [showEnroll, setShowEnroll] = useState(false);
   const [view, setView] = useState<"list" | "history">("list");
   const [history, setHistory] = useState<any[] | null>(null);
+  const [detailRec, setDetailRec] = useState<any>(null);
+  const [revoking, setRevoking] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -69,25 +72,54 @@ export default function UsersManager({ onToast }: { onToast: (m: string) => void
             <Pressable testID="users-enroll-btn" style={styles.primaryBtn} onPress={() => setShowEnroll(true)}><Ionicons name="add-circle" size={16} color="#fff" /><Text style={styles.primaryTxt}>Enroll{selectedIds.length ? ` (${selectedIds.length})` : ""}</Text></Pressable>
           </View>
         ) : (
-          <Pressable testID="users-history-back" style={styles.ghostBtn} onPress={() => setView("list")}><Ionicons name="chevron-back" size={15} color={C.violet} /><Text style={[styles.ghostTxt, { color: C.violet }]}>Back to Users</Text></Pressable>
+          <Pressable testID="users-history-back" style={styles.ghostBtn} onPress={() => { if (detailRec) setDetailRec(null); else setView("list"); }}><Ionicons name="chevron-back" size={15} color={C.violet} /><Text style={[styles.ghostTxt, { color: C.violet }]}>{detailRec ? "Back to Records" : "Back to Users"}</Text></Pressable>
         )}
       </View>
 
       {view === "history" ? (
+        detailRec ? (
+          <View style={styles.panel}>
+            <Text style={styles.panelTitle}>{detailRec.plan_name}</Text>
+            <Text style={styles.hintTxt}>Granted by {detailRec.admin_email} · {fmtDate(detailRec.created_at)}{detailRec.status === "revoked" ? "  ·  REVOKED" : ""}</Text>
+            <View style={styles.grid2}>
+              <KV k="Mode" v={detailRec.mode === "plan" ? "Subscription Plan" : "Free Hours"} />
+              <KV k="Duration" v={`${detailRec.duration_days} days`} />
+              <KV k="Applied" v={String(detailRec.applied_count)} />
+              <KV k="Pending" v={String(detailRec.pending_count || 0)} />
+            </View>
+            <Text style={[styles.kLbl, { marginTop: SP.sm }]}>Recipients ({detailRec.total_count})</Text>
+            {(detailRec.targets || []).map((t: any, i: number) => (
+              <View key={i} style={styles.listRow}>
+                <Ionicons name={t.status === "applied" ? "checkmark-circle" : t.status === "pending" ? "time" : "close-circle"} size={16} color={t.status === "applied" ? C.emerald : t.status === "pending" ? C.amber : C.red} />
+                <Text style={[styles.lrTitle, { flex: 1, marginLeft: 8 }]} numberOfLines={1}>{t.email || t.phone || t.user_id}</Text>
+                <Text style={[styles.status, { color: t.status === "applied" ? C.emerald : t.status === "pending" ? C.amber : C.muted }]}>{t.status}</Text>
+              </View>
+            ))}
+            {detailRec.status !== "revoked" ? (
+              <Pressable testID="enroll-revoke" style={[styles.saveBtn, { backgroundColor: C.red }]} onPress={async () => {
+                setRevoking(true);
+                try { const r = await adminApi.revokeEnrollment(detailRec.enrollment_id); onToast(`Revoked from ${r.revoked_count} user(s)`); setDetailRec(null); setHistory(await adminApi.enrollments().catch(() => [])); load(); }
+                catch (e: any) { onToast(e.message); } finally { setRevoking(false); }
+              }} disabled={revoking}>{revoking ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveTxt}>Revoke Access for All Recipients</Text>}</Pressable>
+            ) : <Text style={[styles.emptySm, { color: C.red }]}>This enrollment has been revoked.</Text>}
+          </View>
+        ) : (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Enrollment Records</Text>
           {!history ? <ActivityIndicator color={C.violet} /> : history.length === 0 ? <Text style={styles.emptySm}>No enrollments yet.</Text> :
             history.map((h) => (
-              <View key={h.enrollment_id} style={styles.histRow}>
+              <Pressable key={h.enrollment_id} testID={`enroll-rec-${h.enrollment_id}`} style={styles.histRow} onPress={() => setDetailRec(h)}>
                 <View style={[styles.statIcon, { backgroundColor: (h.mode === "plan" ? C.violet : C.emerald) + "22" }]}><Ionicons name={h.mode === "plan" ? "card" : "time"} size={16} color={h.mode === "plan" ? C.violet : C.emerald} /></View>
                 <View style={{ flex: 1, marginLeft: SP.sm }}>
-                  <Text style={styles.lrTitle}>{h.plan_name}</Text>
+                  <Text style={styles.lrTitle}>{h.plan_name}{h.status === "revoked" ? "  · revoked" : ""}</Text>
                   <Text style={styles.lrSub} numberOfLines={1}>by {h.admin_email} · {h.applied_count}/{h.total_count} applied{h.pending_count ? ` · ${h.pending_count} pending` : ""}</Text>
                 </View>
                 <Text style={styles.lrMeta}>{fmtDate(h.created_at)}</Text>
-              </View>
+                <Ionicons name="chevron-forward" size={16} color={C.muted} />
+              </Pressable>
             ))}
         </View>
+        )
       ) : (
       <>
       <View style={styles.statRow}>
@@ -348,6 +380,18 @@ function EnrollModal({ visible, onClose, selectedIds, onToast, onDone }: { visib
   const [phones, setPhones] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const pickCsv = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({ type: ["text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel"], copyToCacheDirectory: true });
+      if (res.canceled || !res.assets?.length) return;
+      const text = await (await fetch(res.assets[0].uri)).text();
+      const nums = (text.match(/\+?\d[\d\s-]{6,}\d/g) || []).map((n) => n.replace(/[\s-]/g, ""));
+      const uniq = Array.from(new Set([...phones.split(/[\n,]/).map((p) => p.trim()).filter(Boolean), ...nums]));
+      setPhones(uniq.join("\n"));
+      onToast(`Loaded ${nums.length} number(s) from CSV`);
+    } catch (e: any) { onToast(e.message || "Could not read CSV"); }
+  };
+
   const submit = async () => {
     const phoneList = phones.split(/[\n,]/).map((p) => p.trim()).filter(Boolean);
     if (selectedIds.length === 0 && phoneList.length === 0) { onToast("Select users or paste mobile numbers"); return; }
@@ -379,7 +423,11 @@ function EnrollModal({ visible, onClose, selectedIds, onToast, onDone }: { visib
             </View>
 
             <Text style={styles.kLbl}>Targets</Text>
-            <Text style={styles.hintTxt}>{selectedIds.length} user(s) selected from the list. You can also paste mobile numbers below (one per line) for bulk enrollment.</Text>
+            <Text style={styles.hintTxt}>{selectedIds.length} user(s) selected from the list. Paste mobile numbers below (one per line) or upload a CSV for bulk enrollment.</Text>
+            <Pressable testID="enroll-csv" style={styles.csvBtn} onPress={pickCsv}>
+              <Ionicons name="cloud-upload-outline" size={16} color={C.violet} />
+              <Text style={styles.csvTxt}>Upload CSV of mobile numbers</Text>
+            </Pressable>
             <TextInput testID="enroll-phones" style={[styles.input, { height: 110, textAlignVertical: "top", paddingTop: 10 }]} value={phones} onChangeText={setPhones} placeholder={"+255700000001\n+255700000002"} placeholderTextColor={C.muted} multiline autoCapitalize="none" />
 
             {mode === "plan" ? (
@@ -440,6 +488,8 @@ const styles = StyleSheet.create({
   primaryTxt: { color: "#fff", fontWeight: "800", fontSize: 12 },
   histRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "rgba(39,39,42,0.5)" },
   hintTxt: { color: C.muted, fontSize: 11, marginBottom: 6, lineHeight: 15 },
+  csvBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderStyle: "dashed", borderRadius: 8, height: 44, paddingHorizontal: SP.md, marginBottom: SP.sm },
+  csvTxt: { color: C.violet, fontWeight: "700", fontSize: 12 },
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
   sheet: { backgroundColor: C.card, borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: SP.lg, maxHeight: "92%" },
   sheetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: SP.sm },

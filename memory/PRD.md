@@ -212,3 +212,15 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - UsersManager: per-row checkboxes, header Enroll(+count)/History buttons; EnrollModal (plan vs free-hours, bulk phone textarea, duration presets Daily/3 Days/Weekly/Monthly, free hours + per day/week/month); Enrollment Records history view
 - Verified backend (plan applied+pending, free_hours applied, list) and UI (modal + history render; premium count 16→17)
 - NOTE: free-listening-hours entitlement is stored on user (free_listening_hours/period/expires); player-side enforcement of the hour cap is a future task
+
+## Session 16g — Free-hours enforcement + CSV upload + enrollment detail/revoke
+### Enforce Free Hours (backend routers/me.py + PlayerContext)
+- NEW /api/me/free-hours (GET status: has_grant/cap/used/remaining/exhausted; lazily downgrades expired grants), POST /api/me/free-hours/consume {seconds}
+- Grant model: cap = free_listening_hours*3600 total within window (expires at free_listening_expires); only for subscription.type=="free_hours"
+- PlayerContext: refreshFreeHours on login/premium change; playbackStatusUpdate meters positive deltas, flushes consume() every 15s (or immediately when remaining hits 0) → on exhausted pauses player + blockReason "subscribe"; playTrack blocks start if remaining<=0; exposes freeHoursLeftMin in context
+- Verified: cap 36s → 20 consumed (16 left) → +30 => remaining 0 exhausted True
+### CSV Upload (UsersManager EnrollModal)
+- expo-document-picker "Upload CSV" button; reads file text, regex-extracts phone numbers, dedupes into the phones textarea
+### Enrollment Detail + Revoke (admin.py + UsersManager)
+- POST /api/admin/enrollments/{id}/revoke → clears is_premium/subscription/free_* on all applied recipients, deletes pending, marks record revoked
+- History records now tappable → detail panel (mode/duration/applied/pending + recipients list w/ status) + "Revoke Access for All Recipients"; verified revoke clears grant (has_grant False)

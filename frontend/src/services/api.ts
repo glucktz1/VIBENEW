@@ -86,6 +86,11 @@ export const billingApi = {
   subscribe: (plan_id: string, phone: string) => api.post<any>("/payment/azampay/initiate", { plan_id, phone }),
 };
 
+export const meApi = {
+  freeHours: () => api.get<any>("/me/free-hours"),
+  consume: (seconds: number) => api.post<any>("/me/free-hours/consume", { seconds }),
+};
+
 export const adminApi = {
   stats: () => api.get<any>("/admin/stats"),
   users: (qs = "") => api.get<any[]>(`/admin/users${qs}`),
@@ -99,6 +104,7 @@ export const adminApi = {
   resetUser: (id: string) => api.post<any>(`/admin/users/${id}/reset`, {}),
   enroll: (b: any) => api.post<any>("/admin/enroll", b),
   enrollments: () => api.get<any[]>("/admin/enrollments"),
+  revokeEnrollment: (id: string) => api.post<any>(`/admin/enrollments/${id}/revoke`, {}),
   albums: () => api.get<any[]>("/admin/albums"),
   createAlbum: (b: any) => api.post<any>("/admin/albums", b),
   updateAlbum: (id: string, b: any) => api.put<any>(`/admin/albums/${id}`, b),

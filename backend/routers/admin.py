@@ -661,6 +661,44 @@ async def list_enrollments(admin: dict = Depends(require_admin)):
     return rows
 
 
+@router.post("/enrollments/{enrollment_id}/revoke")
+async def revoke_enrollment(enrollment_id: str, admin: dict = Depends(require_admin)):
+    rec = await db.enrollments.find_one({"enrollment_id": enrollment_id})
+    if not rec:
+        raise HTTPException(status_code=404, detail="Enrollment not found")
+    if rec.get("status") == "revoked":
+        return {"ok": True, "already": True}
+    clear = {
+        "is_premium": False,
+        "subscription": None,
+        "free_listening_hours": None,
+        "free_listening_period": None,
+        "free_listening_expires": None,
+        "free_hours_used_seconds": 0,
+    }
+    revoked = 0
+    for t in rec.get("targets", []):
+        if t.get("status") != "applied":
+            if t.get("phone"):
+                await db.pending_enrollments.delete_one({"phone": t["phone"]})
+            continue
+        u = None
+        if t.get("user_id"):
+            u = await _find_user_by_id(t["user_id"])
+        elif t.get("email"):
+            u = await db.users.find_one({"email": t["email"]})
+        elif t.get("phone"):
+            u = await db.users.find_one({"phone": t["phone"]})
+        if u:
+            await db.users.update_one({"_id": u["_id"]}, {"$set": clear})
+            revoked += 1
+    await db.enrollments.update_one(
+        {"enrollment_id": enrollment_id},
+        {"$set": {"status": "revoked", "revoked_by": admin.get("email"), "revoked_at": now_utc(), "revoked_count": revoked}},
+    )
+    return {"ok": True, "revoked_count": revoked}
+
+
 # -------- Plans --------
 @router.post("/plans")
 async def create_plan(body: PlanIn, admin: dict = Depends(require_admin)):

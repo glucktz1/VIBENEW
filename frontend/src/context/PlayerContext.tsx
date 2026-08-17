@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { AppState, Platform } from "react-native";
 import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from "expo-audio";
 import { storage } from "@/src/utils/storage";
-import { musicApi, billingApi } from "@/src/services/api";
+import { musicApi, billingApi, meApi } from "@/src/services/api";
 import { useAuth } from "@/src/context/AuthContext";
 
 export type Track = {
@@ -28,6 +28,7 @@ type PlayerCtx = {
   queue: Track[];
   currentIndex: number;
   previewMode: boolean;
+  freeHoursLeftMin: number | null;
   blockReason: BlockReason;
   clearBlock: () => void;
   promptDownloadApp: () => void;
@@ -86,13 +87,60 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const loggedSkipsRef = useRef(0);
   const skipsDisabledRef = useRef(false);
 
+  // free listening-hours grant enforcement
+  const freeGrantRef = useRef(false);
+  const freeRemainingRef = useRef(0);
+  const freeAccumRef = useRef(0);
+  const freeLastCtRef = useRef(0);
+  const freeFlushingRef = useRef(false);
+  const [freeHoursLeftMin, setFreeHoursLeftMin] = useState<number | null>(null);
+
+  const refreshFreeHours = useCallback(async () => {
+    try {
+      const st = await meApi.freeHours();
+      freeGrantRef.current = !!st.has_grant;
+      freeRemainingRef.current = st.remaining_seconds || 0;
+      setFreeHoursLeftMin(st.has_grant ? Math.max(0, Math.round((st.remaining_seconds || 0) / 60)) : null);
+    } catch {
+      freeGrantRef.current = false;
+      freeRemainingRef.current = 0;
+      setFreeHoursLeftMin(null);
+    }
+  }, []);
+
+  const stopForFreeHours = useCallback(() => {
+    try { playerRef.current?.pause(); } catch {}
+    setIsPlaying(false);
+    freeRemainingRef.current = 0;
+    setFreeHoursLeftMin(0);
+    setBlockReason("subscribe");
+  }, []);
+
+  const flushFreeHours = useCallback(async () => {
+    if (freeFlushingRef.current) return;
+    const secs = Math.round(freeAccumRef.current);
+    if (secs <= 0) return;
+    freeAccumRef.current = 0;
+    freeFlushingRef.current = true;
+    try {
+      const st = await meApi.consume(secs);
+      freeGrantRef.current = !!st.has_grant;
+      freeRemainingRef.current = st.remaining_seconds || 0;
+      setFreeHoursLeftMin(st.has_grant ? Math.max(0, Math.round((st.remaining_seconds || 0) / 60)) : null);
+      if (st.exhausted) stopForFreeHours();
+    } catch {} finally {
+      freeFlushingRef.current = false;
+    }
+  }, [stopForFreeHours]);
+
   // keep refs in sync with auth-dependent flags
   const isGuestRef = useRef(isGuest);
   const isPremiumRef = useRef(isPremium);
   useEffect(() => {
     isGuestRef.current = isGuest;
     isPremiumRef.current = isPremium;
-  }, [isGuest, isPremium]);
+    void refreshFreeHours();
+  }, [isGuest, isPremium, refreshFreeHours]);
 
   useEffect(() => {
     (async () => {
@@ -193,6 +241,21 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           lastSaveRef.current = nowSec;
           void saveSession();
         }
+        // free listening-hours metering (only for free_hours grantees)
+        if (freeGrantRef.current && status.playing) {
+          const ct = status.currentTime;
+          const delta = ct - freeLastCtRef.current;
+          freeLastCtRef.current = ct;
+          if (delta > 0 && delta < 2) {
+            freeAccumRef.current += delta;
+            if (freeRemainingRef.current - freeAccumRef.current <= 0) {
+              void flushFreeHours();
+              stopForFreeHours();
+            } else if (freeAccumRef.current >= 15) {
+              void flushFreeHours();
+            }
+          }
+        }
       }
       if (typeof status.duration === "number" && status.duration > 0) setDuration(status.duration);
       if (typeof status.playing === "boolean") setIsPlaying(status.playing);
@@ -210,6 +273,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         void handleNext(true);
       }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadAndPlay = useCallback(
@@ -229,6 +293,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setPosition(0);
       positionRef.current = 0;
       lastSaveRef.current = 0;
+      freeLastCtRef.current = 0;
+      freeAccumRef.current = 0;
       setDuration(track.duration || 0);
       player.play();
       setIsPlaying(true);
@@ -339,6 +405,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     async (track: Track, q?: Track[]) => {
       const ok = await canStartPlayback();
       if (!ok) return;
+      if (freeGrantRef.current && freeRemainingRef.current <= 0) {
+        setBlockReason("subscribe");
+        return;
+      }
       const newQueue = q && q.length ? q : [track];
       queueRef.current = newQueue;
       indexRef.current = Math.max(0, newQueue.findIndex((t) => t.song_id === track.song_id));
@@ -490,6 +560,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         queue,
         currentIndex,
         previewMode,
+        freeHoursLeftMin,
         blockReason,
         clearBlock: () => setBlockReason(null),
         promptDownloadApp,
