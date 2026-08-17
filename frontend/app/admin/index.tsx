@@ -15,6 +15,7 @@ import CategoriesManager from "@/src/components/admin/CategoriesManager";
 import SettingsManager from "@/src/components/admin/SettingsManager";
 import AdvertisingManager from "@/src/components/admin/AdvertisingManager";
 import RecommendationManager from "@/src/components/admin/RecommendationManager";
+import ControlManager from "@/src/components/admin/ControlManager";
 import { useAuth } from "@/src/context/AuthContext";
 
 // Gracefy admin palette (zinc / violet) — faithful to the original web dashboard
@@ -57,12 +58,12 @@ const NAV: any[] = [
     { label: "Categories", icon: "pricetags", tab: "categories" },
   ]},
   { type: "group", key: "control", label: "Control & Management", icon: "shield", items: [
-    { label: "Role Management", icon: "shield-half" },
-    { label: "Approvals", icon: "checkmark-circle" },
+    { label: "Role Management", icon: "shield-half", tab: "control", sub: "roles" },
+    { label: "Approvals", icon: "checkmark-circle", tab: "control", sub: "approvals" },
     { label: "Layout Management", icon: "grid-outline" },
     { label: "CDN Management", icon: "cloud" },
     { label: "HLS Streaming", icon: "radio" },
-    { label: "App Health Monitoring", icon: "phone-portrait" },
+    { label: "App Health Monitoring", icon: "phone-portrait", tab: "control", sub: "health" },
   ]},
   { type: "group", key: "settings", label: "Settings", icon: "settings", items: [
     { label: "System Settings", icon: "globe", tab: "settings" },
@@ -112,6 +113,7 @@ const TAB_TITLES: Record<string, string> = {
   settings: "Settings",
   advertising: "Advertising & Campaigns",
   recommendations: "Recommendation Engine",
+  control: "Control & Management",
 };
 
 export default function AdminDashboard() {
@@ -119,7 +121,8 @@ export default function AdminDashboard() {
   const { isAdmin, isGuest, loading: authLoading, user, logout } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"overview" | "content" | "users" | "artists" | "withdrawals" | "analytics" | "revenue" | "transactions" | "location" | "categories" | "settings" | "advertising" | "recommendations">("overview");
+  const [tab, setTab] = useState<"overview" | "content" | "users" | "artists" | "withdrawals" | "analytics" | "revenue" | "transactions" | "location" | "categories" | "settings" | "advertising" | "recommendations" | "control">("overview");
+  const [controlView, setControlView] = useState("roles");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ reports: true });
   const [toast, setToast] = useState("");
@@ -192,6 +195,7 @@ export default function AdminDashboard() {
 
   const onNavPress = (node: any) => {
     setDrawerOpen(false);
+    if (node.sub) setControlView(node.sub);
     if (node.tab) setTab(node.tab);
     else flash(`${node.label}: Inakuja hivi karibuni`);
   };
@@ -285,6 +289,8 @@ export default function AdminDashboard() {
           {tab === "advertising" ? <AdvertisingManager onToast={flash} /> : null}
 
           {tab === "recommendations" ? <RecommendationManager onToast={flash} /> : null}
+
+          {tab === "control" ? <ControlManager onToast={flash} initial={controlView} /> : null}
 
           {tab === "users" ? (
             <>

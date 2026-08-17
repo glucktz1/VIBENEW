@@ -120,4 +120,9 @@ export const adminApi = {
   deleteCampaign: (id: string) => api.del(`/admin/campaigns/${id}`),
   recommendations: () => api.get<any>("/admin/recommendations"),
   updateRecommendations: (b: any) => api.put<any>("/admin/recommendations", b),
+  setUserRole: (email: string, role: string) => api.patch<any>(`/admin/users/${encodeURIComponent(email)}/role`, { role }),
+  approvals: () => api.get<any>("/admin/approvals"),
+  approveAlbum: (id: string, status: string) => api.post<any>(`/admin/approvals/album/${id}`, { status }),
+  approveSong: (id: string, status: string) => api.post<any>(`/admin/approvals/song/${id}`, { status }),
+  health: () => api.get<any>("/admin/health"),
 };

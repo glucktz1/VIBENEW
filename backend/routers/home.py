@@ -45,8 +45,8 @@ async def home_feed(user: Optional[dict] = Depends(get_optional_user)):
     new_albums = await db.albums.find({"status": "active"}, {"_id": 0}).sort("created_at", -1).limit(10).to_list(10)
     for a in new_albums:
         a["songs_count"] = await db.songs.count_documents({"album_id": a["album_id"], "status": "active"})
-    # Featured categories
-    categories = await db.categories.find({"status": "active"}, {"_id": 0}).sort("sort_order", 1).to_list(20)
+    # Featured categories (genre rails)
+    categories = await db.categories.find({}, {"_id": 0}).sort("name", 1).to_list(20)
 
     amap = await _album_map({s.get("album_id") for s in trending})
     _decorate(trending, amap)

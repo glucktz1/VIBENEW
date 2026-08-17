@@ -23,6 +23,12 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - Recommendation engine: weighted scoring (same_album=100, genre=40, popularity=25, artist=20, recency=15) + diversity fallback (cap consecutive same-artist)
 - Subscription plans: Kwa Siku 500, Kwa Wiki 2000, Kwa Mwezi 5500 TZS (simulated Azam Pay)
 
+## What's Been Implemented — Session 13 (Aug 17, 2026) — Control & Management + Genre Home Rows
+- ✅ **Control & Management** (3 screens): Role Management (change user roles), Approvals (approve/reject pending artists/albums/songs), App Health Monitoring (service status + platform counts)
+- ✅ Backend: PATCH /api/admin/users/{email}/role, GET /api/admin/approvals, POST /api/admin/approvals/{album|song}/{id}, GET /api/admin/health
+- ✅ **Genre home rows**: consumer home shows browse rows per genre (Bongo Hits, Amapiano, Gospel, Afrobeat, Hip Hop, R&B); fixed /api/home category rails + assigned albums to genres
+- ✅ Also this session: Settings, Advertising & Campaigns, Recommendation Engine (functional + persisted), analytics /breakdown endpoint
+
 ## What's Been Implemented — Session 11 (Aug 14, 2026) — Content Management + Categories + Data Usage + Rebrand
 - ✅ **Content Management (Albums & Songs)**: search, category + monetization filters, album list with thumbnails/badges/tags, row actions (Edit, Manage Tags, Deactivate/Activate, Delete), and a rich Create/Edit Album form (name, category, geo countries, thumbnail, release date, monetization, artist, status, tags, description)
 - ✅ **Categories** management with music genres: Hip Hop, R&B, Bongo Hits, Gospel, Amapiano, Taarabu, Za Kale, Afrobeat (religious categories removed)

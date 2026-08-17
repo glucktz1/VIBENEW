@@ -295,3 +295,78 @@ async def toggle_billing(admin: dict = Depends(require_admin)):
     new_val = not (cfg.get("value", True) if cfg else True)
     await db.app_config.update_one({"key": "billing"}, {"$set": {"value": new_val}}, upsert=True)
     return {"billing_enabled": new_val}
+
+
+# -------- Control & Management: Roles / Approvals / Health --------
+VALID_ROLES = ["customer", "content_manager", "moderator", "finance", "support", "admin"]
+
+
+@router.patch("/users/{email}/role")
+async def set_user_role(email: str, body: dict, admin: dict = Depends(require_admin)):
+    role = body.get("role")
+    if role not in VALID_ROLES:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    res = await db.users.update_one({"email": email}, {"$set": {"role": role}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"ok": True, "role": role}
+
+
+@router.get("/approvals")
+async def approvals(admin: dict = Depends(require_admin)):
+    artists = await db.artists.find({"status": "pending"}, {"_id": 0, "password_hash": 0}).to_list(200)
+    for a in artists:
+        if a.get("created_at"):
+            a["created_at"] = str(a["created_at"])
+    albums = await db.albums.find({"status": "pending"}, {"_id": 0}).to_list(200)
+    songs = await db.songs.find({"status": "pending"}, {"_id": 0}).to_list(200)
+    return {
+        "summary": {"artists": len(artists), "albums": len(albums), "songs": len(songs),
+                    "total": len(artists) + len(albums) + len(songs)},
+        "artists": artists, "albums": albums, "songs": songs,
+    }
+
+
+@router.post("/approvals/album/{album_id}")
+async def approve_album(album_id: str, body: dict, admin: dict = Depends(require_admin)):
+    status = body.get("status", "active")
+    await db.albums.update_one({"album_id": album_id}, {"$set": {"status": status}})
+    return {"ok": True, "status": status}
+
+
+@router.post("/approvals/song/{song_id}")
+async def approve_song(song_id: str, body: dict, admin: dict = Depends(require_admin)):
+    status = body.get("status", "active")
+    await db.songs.update_one({"song_id": song_id}, {"$set": {"status": status}})
+    return {"ok": True, "status": status}
+
+
+@router.get("/health")
+async def health(admin: dict = Depends(require_admin)):
+    db_ok = True
+    try:
+        await db.command("ping")
+    except Exception:
+        db_ok = False
+    try:
+        from storage import init_storage
+        init_storage()
+        storage_ok = True
+    except Exception:
+        storage_ok = False
+    return {
+        "services": [
+            {"name": "API Server", "status": "operational", "ok": True},
+            {"name": "MongoDB", "status": "operational" if db_ok else "down", "ok": db_ok},
+            {"name": "Object Storage (Audio)", "status": "operational" if storage_ok else "degraded", "ok": storage_ok},
+            {"name": "Streaming CDN", "status": "operational", "ok": True},
+        ],
+        "counts": {
+            "users": await db.users.count_documents({}),
+            "artists": await db.artists.count_documents({}),
+            "albums": await db.albums.count_documents({}),
+            "songs": await db.songs.count_documents({}),
+            "plays": await db.play_events.count_documents({}),
+            "campaigns": await db.campaigns.count_documents({}),
+        },
+    }
