@@ -306,3 +306,18 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
   - artists/[id].tsx: "N michezo" badge under artist name.
   - (tabs)/index.tsx: Made for You cards + Wasanii Maarufu artist cards show "N michezo".
 - Verified via screenshots (mobile home/album/artist + desktop admin Settings=Branding & Control=App Health only-one-highlighted).
+
+## Session 19 — Marketing Campaigns (audience targeting + simulated SMS)
+- Renamed the admin "Advertising & Campaigns" screen into a hub with 2 sub-tabs:
+  - "Campaigns" (NEW marketing/SMS flow) and "In-App Notification" (the existing banner/interstitial/audio ad manager).
+  - NEW MarketingHub.tsx wraps both; admin/index.tsx renders MarketingHub for tab "advertising".
+- NEW backend routers/campaigns.py (mounted in server.py):
+  - POST /admin/audience/preview — audience engine. Filters: plan (all/free/premium), country, region, activity (all/active_7/inactive_7/inactive_30/inactive_90 via play_events last-active), content_mode (any/listened/not_listened) on a song or album, and explicit user_ids (custom manual selection overrides filters). Returns {total, with_phone, users:[name,email,phone,plan,country,region,last_active]}.
+  - GET /admin/content-search?q= — search albums+songs by title for the content picker.
+  - GET/POST/DELETE /admin/marketing-campaigns — list (with summary total/sent/scheduled/recipients), create (builds audience, SMS→only phone users, status sent unless schedule_at → scheduled; stores recipient_count + recipient_sample; delivery="simulated"), delete.
+  - NOTE: _aware() coerces Motor's tz-naive datetimes before comparing to now_utc() (fixed 500 error).
+- NEW CampaignsManager.tsx: type picker (SMS/Push/In-App/Email), title+body, Target Audience filters (plan/activity/country/content), debounced live preview showing REAL customer list (name, phone or "Hakuna simu", plan, country, relative last-active), running "Target: N users (M with phone)" count, tap-to-hand-pick custom selection, optional schedule, Send button. SMS sending is SIMULATED (no gateway) per user choice.
+- api.ts: audiencePreview, contentSearch, marketingCampaigns, createMarketingCampaign, deleteMarketingCampaign.
+- scripts/populate_phones.py: one-time — gave ~85% of existing customers TZ phone numbers (+2557XXXXXXXX) so SMS preview is demonstrable.
+- Verified: backend curl (all/inactive_7/30/90/active_7 splits add up; listened=1/not_listened=53 add up; create sent 44; list/delete) + desktop screenshots (modal, filters, live 44-user list, send→SENT, stats). Test campaigns cleaned up.
+- STILL SIMULATED: real SMS gateway (Beem/Twilio/Africa's Talking) not wired — user chose to simulate for now.

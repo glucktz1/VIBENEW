@@ -15,7 +15,7 @@ import CategoriesManager from "@/src/components/admin/CategoriesManager";
 import UsersManager from "@/src/components/admin/UsersManager";
 import LayoutManager from "@/src/components/admin/LayoutManager";
 import SettingsManager from "@/src/components/admin/SettingsManager";
-import AdvertisingManager from "@/src/components/admin/AdvertisingManager";
+import MarketingHub from "@/src/components/admin/MarketingHub";
 import RecommendationManager from "@/src/components/admin/RecommendationManager";
 import ControlManager from "@/src/components/admin/ControlManager";
 import { useAuth } from "@/src/context/AuthContext";
@@ -377,7 +377,7 @@ export default function AdminDashboard() {
 
           {tab === "settings" ? <SettingsManager onToast={flash} initial={settingsView} /> : null}
 
-          {tab === "advertising" ? <AdvertisingManager onToast={flash} /> : null}
+          {tab === "advertising" ? <MarketingHub onToast={flash} /> : null}
 
           {tab === "recommendations" ? <RecommendationManager onToast={flash} /> : null}
 

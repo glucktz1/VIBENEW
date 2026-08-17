@@ -35,7 +35,7 @@ export default function AdvertisingManager({ onToast }: { onToast: (m: string) =
     <View>
       <View style={styles.headRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Advertising & Campaigns</Text>
+          <Text style={styles.title}>In-App Notifications</Text>
           <Text style={styles.sub}>Manage in-app ad campaigns & placements</Text>
         </View>
         <Pressable testID="ad-create" style={styles.createBtn} onPress={() => setShow(true)}>

@@ -10,7 +10,7 @@ from seed import seed
 from storage import init_storage
 from routers import (
     auth, music, playlists, home, radio, bible, neno, churches, billing, admin,
-    analytics, artists, settings as settings_router, me as me_router,
+    analytics, artists, settings as settings_router, me as me_router, campaigns as campaigns_router,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -48,7 +48,7 @@ async def health():
     return {"status": "healthy"}
 
 
-for r in (auth, music, playlists, home, radio, bible, neno, churches, billing, admin, analytics, artists, settings_router, me_router):
+for r in (auth, music, playlists, home, radio, bible, neno, churches, billing, admin, analytics, artists, settings_router, me_router, campaigns_router):
     app.include_router(r.router)
 
 app.add_middleware(
