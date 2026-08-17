@@ -58,6 +58,7 @@ export const musicApi = {
   search: (q: string) => api.get<any>(`/search?q=${encodeURIComponent(q)}`),
   trackPlay: (id: string) => api.post(`/songs/${id}/play`),
   nextRecs: (songId: string) => api.get<any>(`/recommendations/next?song_id=${songId}`),
+  artistCatalog: (id: string) => api.get<any>(`/artists/public/${id}`),
 };
 
 export const libraryApi = {

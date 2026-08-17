@@ -147,6 +147,40 @@ async def me(artist: dict = Depends(get_current_artist)):
     return public_artist(artist)
 
 
+@router.get("/public/{artist_id}")
+async def public_artist_catalog(artist_id: str):
+    ar = await db.artists.find_one({"artist_id": artist_id}, {"_id": 0})
+    if not ar:
+        raise HTTPException(status_code=404, detail="Artist not found")
+    albums = await db.albums.find(
+        {"artist_id": artist_id, "status": "active"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(200)
+    for a in albums:
+        a["songs_count"] = await db.songs.count_documents({"album_id": a["album_id"], "status": "active"})
+    songs = await db.songs.find(
+        {"artist_id": artist_id, "status": "active"}, {"_id": 0}
+    ).sort("plays", -1).to_list(500)
+    # decorate songs with album thumbnail fallback
+    amap = {a["album_id"]: a for a in albums}
+    for s in songs:
+        alb = amap.get(s.get("album_id"))
+        if alb:
+            s["thumbnail"] = s.get("thumbnail") or alb.get("thumbnail")
+            s["album_title"] = alb.get("title")
+        s["artist_name"] = ar.get("name")
+    return {
+        "artist": {
+            "artist_id": ar.get("artist_id"),
+            "name": ar.get("name"),
+            "bio": ar.get("bio"),
+            "thumbnail": ar.get("photo_url") or ar.get("image_url") or ar.get("avatar_url"),
+        },
+        "albums": albums,
+        "songs": songs,
+    }
+
+
+
 @router.put("/me")
 async def update_me(body: ProfileUpdate, artist: dict = Depends(get_current_artist)):
     updates = {k: v for k, v in body.model_dump().items() if v is not None}

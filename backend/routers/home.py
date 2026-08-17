@@ -56,6 +56,26 @@ async def home_feed(user: Optional[dict] = Depends(get_optional_user)):
         {"id": "new", "title": "New Releases", "type": "albums", "items": new_albums},
     ]
 
+    # Popular artists rail (approved artists with content)
+    artists = await db.artists.find(
+        {"status": "approved"}, {"_id": 0, "artist_id": 1, "name": 1, "photo_url": 1, "image_url": 1, "avatar_url": 1}
+    ).limit(20).to_list(20)
+    artist_items = []
+    for ar in artists:
+        cnt = await db.albums.count_documents({"artist_id": ar["artist_id"], "status": "active"})
+        scnt = await db.songs.count_documents({"artist_id": ar["artist_id"], "status": "active"})
+        if cnt == 0 and scnt == 0:
+            continue
+        artist_items.append({
+            "artist_id": ar["artist_id"],
+            "name": ar.get("name"),
+            "thumbnail": ar.get("photo_url") or ar.get("image_url") or ar.get("avatar_url"),
+            "albums_count": cnt,
+            "songs_count": scnt,
+        })
+    if artist_items:
+        sections.append({"id": "artists", "title": "Wasanii Maarufu", "type": "artists", "items": artist_items})
+
     # Per-category album rails
     for cat in categories[:6]:
         albums = await db.albums.find(

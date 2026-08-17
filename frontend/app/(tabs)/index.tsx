@@ -4,8 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import { useFocusEffect } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { musicApi } from "@/src/services/api";
 import { useAuth } from "@/src/context/AuthContext";
 import { usePlayer, Track } from "@/src/context/PlayerContext";
@@ -115,6 +114,25 @@ export default function Home() {
                   contentContainerStyle={{ paddingRight: SPACING.md }}
                   renderItem={({ item }) => <AlbumCard album={item} />}
                 />
+              ) : section.type === "artists" ? (
+                <FlatList
+                  data={section.items}
+                  keyExtractor={(a) => a.artist_id}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingRight: SPACING.md }}
+                  renderItem={({ item }) => (
+                    <Pressable testID={`home-artist-${item.artist_id}`} style={styles.artistCard} onPress={() => router.push(`/artists/${item.artist_id}`)}>
+                      {item.thumbnail ? (
+                        <Image source={{ uri: item.thumbnail }} style={styles.artistArt} contentFit="cover" transition={200} />
+                      ) : (
+                        <View style={[styles.artistArt, styles.artistFallback]}><Ionicons name="person" size={30} color="#fff" /></View>
+                      )}
+                      <Text style={styles.artistName} numberOfLines={1}>{item.name}</Text>
+                      <Text style={styles.songArtist} numberOfLines={1}>{item.albums_count} albamu</Text>
+                    </Pressable>
+                  )}
+                />
               ) : (
                 <FlatList
                   data={section.items}
@@ -166,7 +184,10 @@ const styles = StyleSheet.create({
   quickIcon: { width: 36, height: 36, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center" },
   quickLabel: { color: COLORS.text, fontSize: FONT.md, fontWeight: "700", marginLeft: SPACING.sm, flex: 1 },
   section: { marginBottom: SPACING.lg },
-  sectionTitle: { color: COLORS.text, fontSize: FONT.xl, fontWeight: "800", marginBottom: SPACING.md },
+  artistCard: { width: 110, marginRight: SPACING.md, alignItems: "center" },
+  artistArt: { width: 100, height: 100, borderRadius: 50, backgroundColor: COLORS.surface },
+  artistFallback: { alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primary },
+  artistName: { color: COLORS.text, fontSize: FONT.md, fontWeight: "700", marginTop: SPACING.sm, textAlign: "center" },  sectionTitle: { color: COLORS.text, fontSize: FONT.xl, fontWeight: "800", marginBottom: SPACING.md },
   songCard: { width: 140, marginRight: SPACING.md },
   songArt: { width: 140, height: 140, borderRadius: RADIUS.lg, backgroundColor: COLORS.surface },
   songPlay: {

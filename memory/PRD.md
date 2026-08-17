@@ -260,3 +260,14 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - player.tsx: useSafeAreaInsets; controls container paddingBottom = max(insets.bottom,12)+SPACING.md (fixes web+native overlap); verified controls fully visible
 ### Album listing thumbnails
 - album/[id].tsx: dropped index prop to SongRow so it renders song/album thumbnail instead of number; thumbnail falls back to album cover; verified
+
+## Session 16k — Player fits window + Artists home row & artist page
+### Player layout fit (web + native)
+- player.tsx: artWrap now flex:1 minHeight:0 (absorbs space); art aspectRatio 1 + flexShrink:1 + maxWidth 360 (shrinks on short screens); controls/meta marginTop reduced xl->md; removed duplicate art style; controls keep bottom safe-area padding. Verified controls fully visible when maximized.
+### Artists on Home + consumer artist page
+- home.py: adds "artists" section (type=artists) — approved artists with content (thumbnail from photo_url/image_url/avatar_url, albums/songs counts)
+- artists.py: NEW public GET /api/artists/public/{artist_id} -> {artist, albums(+songs_count), songs(+thumbnail/album_title/artist_name)}
+- api.ts musicApi.artistCatalog(id)
+- (tabs)/index.tsx: renders artists rail (circular avatars) -> router.push(/artists/{id}); merged duplicate expo-router import; added artistCard styles
+- NEW app/artists/[id].tsx: consumer artist screen (avatar, counts, bio, "Cheza Zote" Play All -> playTrack(queue), Albums rail via AlbumCard, Popular Songs via SongRow). Note: route is plural /artists/[id] to avoid clash with artist PORTAL at /artist
+- Verified: home artists row + artist page + Play All + full player controls
