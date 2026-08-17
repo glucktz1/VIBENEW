@@ -30,6 +30,19 @@ DEFAULT_SETTINGS = {
     "free_user_daily_songs": 20,
     "guest_play_limit": 3,
     "free_prompt_ringtone_pct": 50,   # % of times FREE users see ringtone prompt vs contribute
+    # Branding
+    "app_name": "Vibe",
+    "brand_primary_color": "#00A8E8",
+    "support_email": "support@vibe.app",
+    # Legal & Compliance
+    "company_name": "Vibe Music",
+    "terms_url": "",
+    "privacy_url": "",
+    # Auth
+    "email_verification_required": False,
+    # Security
+    "two_factor_admin": False,
+    "session_timeout_min": 60,
 }
 
 

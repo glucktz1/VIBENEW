@@ -10,6 +10,7 @@ import { useAuth } from "@/src/context/AuthContext";
 import { usePlayer, Track } from "@/src/context/PlayerContext";
 import AlbumCard from "@/src/components/AlbumCard";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
+import { formatCount } from "@/src/utils/format";
 
 const QUICK = [
   { key: "radio", label: "Redio", icon: "radio", route: "/radio", color: "#0077B6" },
@@ -129,7 +130,7 @@ export default function Home() {
                         <View style={[styles.artistArt, styles.artistFallback]}><Ionicons name="person" size={30} color="#fff" /></View>
                       )}
                       <Text style={styles.artistName} numberOfLines={1}>{item.name}</Text>
-                      <Text style={styles.songArtist} numberOfLines={1}>{item.albums_count} albamu</Text>
+                      <Text style={styles.songArtist} numberOfLines={1}>{item.plays > 0 ? `${formatCount(item.plays)} michezo` : `${item.albums_count} albamu`}</Text>
                     </Pressable>
                   )}
                 />
@@ -145,7 +146,7 @@ export default function Home() {
                       <Image source={{ uri: item.thumbnail }} style={styles.recArt} contentFit="cover" transition={200} />
                       <View style={{ flex: 1, marginLeft: SPACING.sm }}>
                         <Text style={styles.songTitle} numberOfLines={1}>{item.title}</Text>
-                        <Text style={styles.songArtist} numberOfLines={1}>{item.artist_name || "Vibe"}</Text>
+                        <Text style={styles.songArtist} numberOfLines={1}>{item.plays > 0 ? `${formatCount(item.plays)} michezo` : (item.artist_name || "Vibe")}</Text>
                       </View>
                       <View style={styles.recPlay}><Ionicons name="play" size={16} color="#fff" /></View>
                     </Pressable>

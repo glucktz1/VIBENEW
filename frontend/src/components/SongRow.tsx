@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 import { usePlayer } from "@/src/context/PlayerContext";
 import AnimatedEqualizer from "@/src/components/AnimatedEqualizer";
+import { formatCount } from "@/src/utils/format";
 
 export default function SongRow({
   song,
@@ -33,6 +34,9 @@ export default function SongRow({
         </Text>
         <Text style={styles.sub} numberOfLines={1}>
           {song.artist_name || song.album_title || "Vibe"}
+          {song.plays > 0 ? (
+            <Text style={styles.plays}>{"  ·  "}<Ionicons name="play" size={10} color={COLORS.textMuted} /> {formatCount(song.plays)}</Text>
+          ) : null}
         </Text>
       </View>
       {isActive ? (
@@ -57,5 +61,6 @@ const styles = StyleSheet.create({
   title: { color: COLORS.text, fontSize: FONT.md, fontWeight: "600" },
   activeText: { color: COLORS.primary },
   sub: { color: COLORS.textSecondary, fontSize: FONT.sm, marginTop: 2 },
+  plays: { color: COLORS.textMuted, fontSize: FONT.sm },
   more: { paddingHorizontal: SPACING.xs },
 });

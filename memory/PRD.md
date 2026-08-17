@@ -293,3 +293,16 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
   - Recently Added: NEW dedicated "recently" branch — small square tiles (recentCard 104px) with title + artist sub, navigates to /album/[id]. Previously fell through to broken songs branch.
   - Section titles: tighter (letterSpacing -0.5, marginBottom sm); artist avatars 88px.
 - Verified via screenshot on 390px viewport — matches Spotify reference.
+
+## Session 18 — Admin subsection fix + Play Counts (social proof)
+- BUG FIX (Settings & Control & Management sidebar): all subsections highlighted at once and Settings items all showed identical content.
+  - admin/index.tsx: gave each Settings sidebar item a distinct `sub` (system/app/branding/legal/monetization/auth/security); added `settingsView` state; onNavPress routes sub to settingsView (settings) or controlView (control); NavRow active now checks `c.sub === activeSub` per-tab.
+  - SettingsManager.tsx: rewritten with horizontal sub-tab pills + per-section fields (toggles/steppers/text inputs), accepts `initial` prop. Each subsection now shows distinct, persistable content.
+  - backend routers/settings.py: added Branding (app_name, brand_primary_color, support_email), Legal (company_name, terms_url, privacy_url), Auth (email_verification_required), Security (two_factor_admin, session_timeout_min) to DEFAULT_SETTINGS so they persist via PUT /admin/settings.
+- FEATURE Play Counts (social proof): songs already track `plays`; surfaced across UI.
+  - backend home.py: artist_items now include summed `plays`; artists.py public catalog returns artist.plays (sum of song plays).
+  - frontend src/utils/format.ts NEW: formatCount (1.2K / 3.4M).
+  - SongRow.tsx: shows "▶ N" play count in subtitle when plays>0.
+  - artists/[id].tsx: "N michezo" badge under artist name.
+  - (tabs)/index.tsx: Made for You cards + Wasanii Maarufu artist cards show "N michezo".
+- Verified via screenshots (mobile home/album/artist + desktop admin Settings=Branding & Control=App Health only-one-highlighted).

@@ -68,13 +68,13 @@ const NAV: any[] = [
     { label: "App Health Monitoring", icon: "phone-portrait", tab: "control", sub: "health" },
   ]},
   { type: "group", key: "settings", label: "Settings", icon: "settings", items: [
-    { label: "System Settings", icon: "globe", tab: "settings" },
-    { label: "App Settings", icon: "settings-outline", tab: "settings" },
-    { label: "Branding", icon: "color-palette", tab: "settings" },
-    { label: "Legal & Compliance", icon: "document-text", tab: "settings" },
-    { label: "Monetization", icon: "card", tab: "settings" },
-    { label: "Auth Settings", icon: "lock-closed", tab: "settings" },
-    { label: "Security", icon: "lock-closed-outline", tab: "settings" },
+    { label: "System Settings", icon: "globe", tab: "settings", sub: "system" },
+    { label: "App Settings", icon: "settings-outline", tab: "settings", sub: "app" },
+    { label: "Branding", icon: "color-palette", tab: "settings", sub: "branding" },
+    { label: "Legal & Compliance", icon: "document-text", tab: "settings", sub: "legal" },
+    { label: "Monetization", icon: "card", tab: "settings", sub: "monetization" },
+    { label: "Auth Settings", icon: "lock-closed", tab: "settings", sub: "auth" },
+    { label: "Security", icon: "lock-closed-outline", tab: "settings", sub: "security" },
   ]},
   { type: "item", label: "Advertising & Campaigns", icon: "megaphone", tab: "advertising" },
   { type: "item", label: "Feedback Manager", icon: "chatbubble-ellipses" },
@@ -126,6 +126,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"overview" | "content" | "users" | "artists" | "withdrawals" | "analytics" | "revenue" | "transactions" | "location" | "categories" | "settings" | "advertising" | "recommendations" | "control">("overview");
   const [controlView, setControlView] = useState("roles");
+  const [settingsView, setSettingsView] = useState("system");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ reports: true });
   const [toast, setToast] = useState("");
@@ -220,7 +221,10 @@ export default function AdminDashboard() {
 
   const onNavPress = (node: any) => {
     setDrawerOpen(false);
-    if (node.sub) setControlView(node.sub);
+    if (node.sub) {
+      if (node.tab === "settings") setSettingsView(node.sub);
+      else setControlView(node.sub);
+    }
     if (node.tab) setTab(node.tab);
     else flash(`${node.label}: Inakuja hivi karibuni`);
   };
@@ -296,9 +300,12 @@ export default function AdminDashboard() {
                 <Text style={[styles.groupLabel, (isOpen || hasActive) && { color: C.violet }]}>{node.label}</Text>
                 <Ionicons name={isOpen ? "chevron-up" : "chevron-down"} size={16} color={isOpen || hasActive ? C.violet : C.muted} />
               </Pressable>
-              {isOpen ? node.items.map((c: any) => (
-                <NavRow key={c.label} node={c} active={!!(c.tab && c.tab === tab)} indent onPress={() => onNavPress(c)} />
-              )) : null}
+              {isOpen ? node.items.map((c: any) => {
+                const childOnTab = !!(c.tab && c.tab === tab);
+                const activeSub = c.tab === "settings" ? settingsView : c.tab === "control" ? controlView : null;
+                const childActive = childOnTab && (!c.sub || c.sub === activeSub);
+                return <NavRow key={c.label} node={c} active={childActive} indent onPress={() => onNavPress(c)} />;
+              }) : null}
             </View>
           );
         })}
@@ -368,7 +375,7 @@ export default function AdminDashboard() {
 
           {tab === "categories" ? <CategoriesManager onToast={flash} /> : null}
 
-          {tab === "settings" ? <SettingsManager onToast={flash} /> : null}
+          {tab === "settings" ? <SettingsManager onToast={flash} initial={settingsView} /> : null}
 
           {tab === "advertising" ? <AdvertisingManager onToast={flash} /> : null}
 

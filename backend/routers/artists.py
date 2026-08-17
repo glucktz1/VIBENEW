@@ -174,6 +174,7 @@ async def public_artist_catalog(artist_id: str):
             "name": ar.get("name"),
             "bio": ar.get("bio"),
             "thumbnail": ar.get("photo_url") or ar.get("image_url") or ar.get("avatar_url"),
+            "plays": sum(int(s.get("plays") or 0) for s in songs),
         },
         "albums": albums,
         "songs": songs,

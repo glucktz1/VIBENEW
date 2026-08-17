@@ -9,6 +9,7 @@ import { usePlayer, Track } from "@/src/context/PlayerContext";
 import AlbumCard from "@/src/components/AlbumCard";
 import SongRow from "@/src/components/SongRow";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
+import { formatCount } from "@/src/utils/format";
 
 export default function ArtistScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -57,6 +58,12 @@ export default function ArtistScreen() {
           )}
           <Text style={styles.name}>{artist.name}</Text>
           <Text style={styles.sub}>{albums.length} albamu · {songs.length} nyimbo</Text>
+          {artist.plays > 0 ? (
+            <View style={styles.playsBadge}>
+              <Ionicons name="play" size={12} color={COLORS.primary} />
+              <Text style={styles.playsBadgeText}>{formatCount(artist.plays)} michezo</Text>
+            </View>
+          ) : null}
           {artist.bio ? <Text style={styles.bio} numberOfLines={3}>{artist.bio}</Text> : null}
           <Pressable testID="artist-play-all" style={styles.playAll} onPress={playAll} disabled={!songs.length}>
             <Ionicons name="play" size={20} color="#fff" />
@@ -97,6 +104,8 @@ const styles = StyleSheet.create({
   fallback: { alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primary },
   name: { color: COLORS.text, fontSize: FONT.xxl, fontWeight: "800", marginTop: SPACING.md },
   sub: { color: COLORS.textMuted, fontSize: FONT.sm, marginTop: 4 },
+  playsBadge: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: COLORS.surface, borderRadius: 9999, paddingHorizontal: SPACING.md, paddingVertical: 5, marginTop: SPACING.sm },
+  playsBadgeText: { color: COLORS.primary, fontSize: FONT.sm, fontWeight: "700" },
   bio: { color: COLORS.textMuted, fontSize: FONT.sm, marginTop: SPACING.sm, textAlign: "center" },
   playAll: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: COLORS.primary, borderRadius: 9999, paddingHorizontal: SPACING.xl, paddingVertical: 12, marginTop: SPACING.md },
   playAllText: { color: "#fff", fontWeight: "800", fontSize: FONT.md },

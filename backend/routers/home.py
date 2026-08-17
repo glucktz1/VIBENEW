@@ -66,12 +66,17 @@ async def home_feed(user: Optional[dict] = Depends(get_optional_user)):
         scnt = await db.songs.count_documents({"artist_id": ar["artist_id"], "status": "active"})
         if cnt == 0 and scnt == 0:
             continue
+        _pa = await db.songs.aggregate([
+            {"$match": {"artist_id": ar["artist_id"], "status": "active"}},
+            {"$group": {"_id": None, "plays": {"$sum": "$plays"}}},
+        ]).to_list(1)
         artist_items.append({
             "artist_id": ar["artist_id"],
             "name": ar.get("name"),
             "thumbnail": ar.get("photo_url") or ar.get("image_url") or ar.get("avatar_url"),
             "albums_count": cnt,
             "songs_count": scnt,
+            "plays": (_pa[0]["plays"] if _pa else 0) or 0,
         })
     if artist_items:
         sections.append({"id": "artists", "title": "Wasanii Maarufu", "type": "artists", "items": artist_items})
