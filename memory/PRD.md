@@ -224,3 +224,19 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 ### Enrollment Detail + Revoke (admin.py + UsersManager)
 - POST /api/admin/enrollments/{id}/revoke → clears is_premium/subscription/free_* on all applied recipients, deletes pending, marks record revoked
 - History records now tappable → detail panel (mode/duration/applied/pending + recipients list w/ status) + "Revoke Access for All Recipients"; verified revoke clears grant (has_grant False)
+
+## Session 16h — Users: single enroll, new columns/filters, bulk actions, CSV, free-minutes analytics
+### Backend (admin.py, auth.py, analytics.py)
+- list_users: filters country, registered_from/to (date range); new row fields email, mobile, channel(admin/web/app via subscription.channel|register_channel|platform), country_region, subscribed_at, last_active
+- GET /admin/users/countries (distinct); POST /admin/users/bulk-action {user_ids, action: activate|deactivate|delete}
+- get_user_detail: adds mobile, channel, country_region, subscribed_at, last_active
+- enroll subscription now stamps channel:"admin"
+- auth.py register captures register_channel(web/app), country, region, latitude/longitude, ip (X-Forwarded-For)
+- analytics GET /analytics/free-minutes (total_free_minutes/active_grants/users_consumed; excluded from revenue)
+- backfill_devices.py now seeds country+region(city)+register_channel
+### Frontend
+- api: userCountries, usersBulkAction, adminApi.freeMinutes
+- UsersManager: single-user Enroll button in UserDetail header (EnrollModal with [userId]); Customers table rebuilt columns (Name/Email/Mobile/Type/Channel/Country-Region/Subscribed/Last Active/Status); country chips + registration date-range filters; Export CSV (web Blob download); multi-select bulk bar Activate/Deactivate/Delete; Delete requires typing "delete N users"; UserDetail Profile tab shows Mobile/Channel/Country-Region/Date Subscribed/Last Active On (email-only)
+- admin/index Overview sub-tab: amber "free minutes consumed (excluded from revenue)" banner via adminApi.freeMinutes
+- Verified desktop: columns/filters/export/bulk bar/delete-confirm render; bulk activate/deactivate API ok
+### NOTE / flag: precise IP->city geolocation needs a geo provider (ipinfo/MaxMind API key); currently region comes from client-provided/backfilled values. GPS capture needs location-permission flow in the consumer register screen (not yet built).

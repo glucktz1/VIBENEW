@@ -697,3 +697,26 @@ async def _find_user_email(uid: str) -> str:
     if not u:
         return "Anonymous"
     return u.get("name") or u.get("email") or "Anonymous"
+
+@router.get("/free-minutes")
+async def free_minutes(admin: dict = Depends(require_admin)):
+    """Free listening minutes consumed via admin grants — NOT part of revenue."""
+    users = await db.users.find(
+        {"free_hours_used_seconds": {"$gt": 0}},
+        {"_id": 0, "free_hours_used_seconds": 1},
+    ).to_list(100000)
+    total_seconds = sum(u.get("free_hours_used_seconds", 0) for u in users)
+    now = datetime.now(timezone.utc)
+    active_grants = await db.users.count_documents({
+        "subscription.type": "free_hours",
+        "free_listening_expires": {"$gt": now},
+    })
+    granted = await db.users.count_documents({"subscription.type": "free_hours"})
+    return {
+        "total_free_minutes": round(total_seconds / 60.0, 1),
+        "total_free_hours": round(total_seconds / 3600.0, 1),
+        "users_consumed": len(users),
+        "active_grants": active_grants,
+        "total_grants": granted,
+        "note": "Free minutes are promotional and excluded from revenue.",
+    }

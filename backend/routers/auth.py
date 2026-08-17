@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 from pymongo.errors import DuplicateKeyError
 
@@ -22,6 +22,10 @@ class RegisterIn(BaseModel):
     device_manufacturer: str | None = None
     device_model: str | None = None
     os_version: str | None = None
+    country: str | None = None
+    region: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class LoginIn(BaseModel):
@@ -30,7 +34,11 @@ class LoginIn(BaseModel):
 
 
 @router.post("/register")
-async def register(body: RegisterIn):
+async def register(body: RegisterIn, request: Request):
+    plat = (body.platform or "unknown").lower()
+    channel = "web" if plat == "web" else ("app" if plat in ("android", "ios") else "app")
+    fwd = request.headers.get("x-forwarded-for", "")
+    ip = fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "")
     doc = {
         "email": str(body.email).lower(),
         "name": body.name.strip(),
@@ -40,11 +48,17 @@ async def register(body: RegisterIn):
         "subscription": None,
         "liked_songs": [],
         "disabled": False,
-        "platform": (body.platform or "unknown").lower(),
-        "device_type": (body.platform or "unknown").lower(),
+        "platform": plat,
+        "device_type": plat,
         "device_manufacturer": body.device_manufacturer or "",
         "device_model": body.device_model or "",
         "os_version": body.os_version or "",
+        "register_channel": channel,
+        "country": body.country or "",
+        "region": body.region or "",
+        "latitude": body.latitude,
+        "longitude": body.longitude,
+        "ip": ip,
         "created_at": now_utc(),
     }
     try:

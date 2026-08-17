@@ -24,8 +24,11 @@ export default function UsersManager({ onToast }: { onToast: (m: string) => void
   const [stats, setStats] = useState<any>(null);
   const [search, setSearch] = useState("");
   const [fMembership, setFMembership] = useState("all");
-  const [fRegister, setFRegister] = useState("all");
   const [fStatus, setFStatus] = useState("all");
+  const [fCountry, setFCountry] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [countries, setCountries] = useState<string[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [showEnroll, setShowEnroll] = useState(false);
@@ -33,22 +36,53 @@ export default function UsersManager({ onToast }: { onToast: (m: string) => void
   const [history, setHistory] = useState<any[] | null>(null);
   const [detailRec, setDetailRec] = useState<any>(null);
   const [revoking, setRevoking] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteText, setDeleteText] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const qs = `?membership_type=${fMembership}&register_by=${encodeURIComponent(fRegister)}&status=${fStatus}${search ? `&search=${encodeURIComponent(search)}` : ""}`;
+    const qs = `?membership_type=${fMembership}&status=${fStatus}&country=${encodeURIComponent(fCountry)}${search ? `&search=${encodeURIComponent(search)}` : ""}${dateFrom ? `&registered_from=${dateFrom}` : ""}${dateTo ? `&registered_to=${dateTo}` : ""}`;
     const [r, s] = await Promise.all([
       adminApi.users(qs).catch(() => []),
       adminApi.userStats().catch(() => null),
     ]);
     setRows(r); setStats(s); setLoading(false);
-  }, [fMembership, fRegister, fStatus, search]);
+  }, [fMembership, fStatus, fCountry, dateFrom, dateTo, search]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { adminApi.userCountries().then(setCountries).catch(() => {}); }, []);
 
   if (selected) return <UserDetail userId={selected} onBack={() => { setSelected(null); load(); }} onToast={onToast} />;
 
   const selectedIds = Object.keys(checked).filter((k) => checked[k]);
   const openHistory = async () => { setView("history"); setHistory(await adminApi.enrollments().catch(() => [])); };
+
+  const bulkAction = async (action: string) => {
+    setBulkBusy(true);
+    try {
+      const res = await adminApi.usersBulkAction(selectedIds, action);
+      onToast(`${action} — ${res.affected} user(s)`);
+      setChecked({}); setConfirmDelete(false); setDeleteText("");
+      await load();
+    } catch (e: any) { onToast(e.message); } finally { setBulkBusy(false); }
+  };
+
+  const exportCsv = () => {
+    const cols = ["name", "email", "mobile", "membership_type", "channel", "country", "region", "subscribed_at", "last_active", "status", "created_at"];
+    const head = cols.join(",");
+    const body = rows.map((r) => cols.map((c) => `"${String(r[c] ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const csv = `${head}\n${body}`;
+    if (Platform.OS === "web") {
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `vibe-users-${Date.now()}.csv`; a.click();
+      URL.revokeObjectURL(url);
+      onToast(`Exported ${rows.length} users`);
+    } else {
+      onToast("CSV export is available on web");
+    }
+  };
 
   const statCards = [
     { l: "Total Users", v: stats?.total_users ?? 0, i: "people", c: C.violet, big: true },
@@ -139,47 +173,59 @@ export default function UsersManager({ onToast }: { onToast: (m: string) => void
         <TextInput testID="users-search" style={styles.searchInput} value={search} onChangeText={setSearch} placeholder={`Search ${stats?.total_users ?? ""} Users`} placeholderTextColor={C.muted} />
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: SP.sm }}>
-        <FilterGroup label="Type" value={fMembership} opts={[["all", "All Types"], ["Free", "Free"], ["Premium", "Premium"]]} onPick={setFMembership} />
-        <FilterGroup label="Method" value={fRegister} opts={[["all", "All Methods"], ["Email", "Email"], ["Mobile No", "Mobile"]]} onPick={setFRegister} />
-        <FilterGroup label="Status" value={fStatus} opts={[["all", "All Status"], ["active", "Active"], ["suspended", "Suspended"]]} onPick={setFStatus} />
+        <FilterGroup value={fMembership} opts={[["all", "All Types"], ["Free", "Free"], ["Premium", "Premium"]]} onPick={setFMembership} />
+        <FilterGroup value={fStatus} opts={[["all", "All Status"], ["active", "Active"], ["suspended", "Suspended"]]} onPick={setFStatus} />
+        <FilterGroup value={fCountry} opts={[["all", "All Countries"], ...countries.map((c) => [c, c] as [string, string])]} onPick={setFCountry} />
       </ScrollView>
+      <View style={styles.dateRow}>
+        <Text style={styles.kLbl}>Registered:</Text>
+        <TextInput testID="users-date-from" style={styles.dateInput} value={dateFrom} onChangeText={setDateFrom} placeholder="From YYYY-MM-DD" placeholderTextColor={C.muted} autoCapitalize="none" />
+        <TextInput testID="users-date-to" style={styles.dateInput} value={dateTo} onChangeText={setDateTo} placeholder="To YYYY-MM-DD" placeholderTextColor={C.muted} autoCapitalize="none" />
+        <Pressable testID="users-export" style={styles.exportBtn} onPress={exportCsv}><Ionicons name="download-outline" size={15} color={C.emerald} /><Text style={styles.exportTxt}>Export</Text></Pressable>
+      </View>
+
+      {selectedIds.length > 0 ? (
+        <View style={styles.bulkBar}>
+          <Text style={styles.bulkTxt}>{selectedIds.length} selected</Text>
+          <View style={{ flexDirection: "row", gap: SP.sm }}>
+            <Pressable testID="bulk-activate" style={styles.bulkBtn} onPress={() => bulkAction("activate")} disabled={bulkBusy}><Ionicons name="checkmark-circle" size={14} color={C.emerald} /><Text style={[styles.bulkBtnTxt, { color: C.emerald }]}>Activate</Text></Pressable>
+            <Pressable testID="bulk-deactivate" style={styles.bulkBtn} onPress={() => bulkAction("deactivate")} disabled={bulkBusy}><Ionicons name="ban" size={14} color={C.amber} /><Text style={[styles.bulkBtnTxt, { color: C.amber }]}>Deactivate</Text></Pressable>
+            <Pressable testID="bulk-delete" style={styles.bulkBtn} onPress={() => { setConfirmDelete(true); setDeleteText(""); }} disabled={bulkBusy}><Ionicons name="trash" size={14} color={C.red} /><Text style={[styles.bulkBtnTxt, { color: C.red }]}>Delete</Text></Pressable>
+          </View>
+        </View>
+      ) : null}
 
       {loading ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={{ minWidth: 900 }}>
-            <View style={styles.thead}>
-              <Text style={[styles.th, { width: 150 }]}>USER ID</Text>
-              <Text style={[styles.th, { width: 230 }]}>EMAIL / MOBILE</Text>
-              <Text style={[styles.th, { width: 90 }]}>TYPE</Text>
-              <Text style={[styles.th, { width: 110 }]}>COUNTRY</Text>
-              <Text style={[styles.th, { width: 110 }]}>REGISTER BY</Text>
-              <Text style={[styles.th, { width: 90 }]}>STATUS</Text>
-              <Text style={[styles.th, { width: 70 }]}>ACTIONS</Text>
-            </View>
+          <View style={{ minWidth: 1180 }}>
             <View style={styles.thead}>
               <Text style={[styles.th, { width: 36 }]}> </Text>
-              <Text style={[styles.th, { width: 150 }]}>USER ID</Text>
-              <Text style={[styles.th, { width: 230 }]}>EMAIL / MOBILE</Text>
-              <Text style={[styles.th, { width: 90 }]}>TYPE</Text>
-              <Text style={[styles.th, { width: 110 }]}>COUNTRY</Text>
-              <Text style={[styles.th, { width: 110 }]}>REGISTER BY</Text>
+              <Text style={[styles.th, { width: 140 }]}>NAME</Text>
+              <Text style={[styles.th, { width: 210 }]}>EMAIL</Text>
+              <Text style={[styles.th, { width: 120 }]}>MOBILE</Text>
+              <Text style={[styles.th, { width: 80 }]}>TYPE</Text>
+              <Text style={[styles.th, { width: 75 }]}>CHANNEL</Text>
+              <Text style={[styles.th, { width: 150 }]}>COUNTRY / REGION</Text>
+              <Text style={[styles.th, { width: 105 }]}>SUBSCRIBED</Text>
+              <Text style={[styles.th, { width: 105 }]}>LAST ACTIVE</Text>
               <Text style={[styles.th, { width: 90 }]}>STATUS</Text>
-              <Text style={[styles.th, { width: 70 }]}>ACTIONS</Text>
+              <Text style={[styles.th, { width: 60 }]}>ACTIONS</Text>
             </View>
             {rows.map((u) => (
               <View key={u.user_id} style={styles.trow}>
                 <Pressable testID={`user-check-${u.user_id}`} style={{ width: 36 }} onPress={() => setChecked((c) => ({ ...c, [u.user_id]: !c[u.user_id] }))} hitSlop={8}>
                   <Ionicons name={checked[u.user_id] ? "checkbox" : "square-outline"} size={18} color={checked[u.user_id] ? C.violet : C.muted} />
                 </Pressable>
-                <Pressable testID={`user-row-${u.user_id}`} style={{ width: 150 }} onPress={() => setSelected(u.user_id)}><Text style={[styles.td, styles.tdId]} numberOfLines={1}>{u.name || u.user_id}</Text></Pressable>
-                <Text style={[styles.td, { width: 230 }]} numberOfLines={1}>
-                  <Text style={styles.ccTag}>{cc(u.country)} </Text>{u.phone || u.email}
-                </Text>
-                <View style={{ width: 90 }}><View style={[styles.pill, { borderColor: MEMBERSHIP_C[u.membership_type] || C.muted }]}><Text style={[styles.pillTxt, { color: MEMBERSHIP_C[u.membership_type] || C.muted }]}>{u.membership_type}</Text></View></View>
-                <Text style={[styles.td, { width: 110 }]} numberOfLines={1}>{u.country}</Text>
-                <Text style={[styles.td, { width: 110 }]} numberOfLines={1}>{u.register_by}</Text>
+                <Pressable testID={`user-row-${u.user_id}`} style={{ width: 140 }} onPress={() => setSelected(u.user_id)}><Text style={[styles.td, styles.tdId]} numberOfLines={1}>{u.name || "—"}</Text></Pressable>
+                <Text style={[styles.td, { width: 210 }]} numberOfLines={1}>{u.email}</Text>
+                <Text style={[styles.td, { width: 120 }]} numberOfLines={1}>{u.mobile || "—"}</Text>
+                <View style={{ width: 80 }}><View style={[styles.pill, { borderColor: MEMBERSHIP_C[u.membership_type] || C.muted }]}><Text style={[styles.pillTxt, { color: MEMBERSHIP_C[u.membership_type] || C.muted }]}>{u.membership_type}</Text></View></View>
+                <View style={{ width: 75 }}><Text style={styles.chTag}>{u.channel}</Text></View>
+                <Text style={[styles.td, { width: 150 }]} numberOfLines={1}><Text style={styles.ccTag}>{cc(u.country)} </Text>{u.country_region}</Text>
+                <Text style={[styles.td, { width: 105 }]} numberOfLines={1}>{u.subscribed_at ? fmtDate(u.subscribed_at).split(",")[0] : "—"}</Text>
+                <Text style={[styles.td, { width: 105 }]} numberOfLines={1}>{u.last_active ? fmtDate(u.last_active).split(",")[0] : "—"}</Text>
                 <View style={{ width: 90 }}><Text style={[styles.status, { color: u.status === "active" ? C.emerald : C.red }]}>{u.status === "active" ? "Active" : "Suspended"}</Text></View>
-                <Pressable style={{ width: 70 }} onPress={() => setSelected(u.user_id)}><Ionicons name="chevron-forward" size={18} color={C.muted} /></Pressable>
+                <Pressable style={{ width: 60 }} onPress={() => setSelected(u.user_id)}><Ionicons name="chevron-forward" size={18} color={C.muted} /></Pressable>
               </View>
             ))}
             {rows.length === 0 ? <Text style={styles.empty}>No users match your filters.</Text> : null}
@@ -189,6 +235,20 @@ export default function UsersManager({ onToast }: { onToast: (m: string) => void
       </>
       )}
       <EnrollModal visible={showEnroll} onClose={() => setShowEnroll(false)} selectedIds={selectedIds} onToast={onToast} onDone={() => { setShowEnroll(false); setChecked({}); load(); }} />
+
+      <Modal transparent visible={confirmDelete} animationType="fade" onRequestClose={() => setConfirmDelete(false)}>
+        <View style={styles.centerOverlay}>
+          <View style={styles.confirmCard}>
+            <Text style={styles.sheetTitle}>Delete {selectedIds.length} user(s)?</Text>
+            <Text style={styles.hintTxt}>This permanently removes the selected users. To confirm, type: <Text style={{ color: C.red, fontWeight: "800" }}>delete {selectedIds.length} users</Text></Text>
+            <TextInput testID="delete-confirm-input" style={styles.input} value={deleteText} onChangeText={setDeleteText} placeholder={`delete ${selectedIds.length} users`} placeholderTextColor={C.muted} autoCapitalize="none" />
+            <Pressable testID="delete-confirm-btn" style={[styles.saveBtn, { backgroundColor: deleteText.trim().toLowerCase() === `delete ${selectedIds.length} users` ? C.red : C.border }]} disabled={deleteText.trim().toLowerCase() !== `delete ${selectedIds.length} users` || bulkBusy} onPress={() => bulkAction("delete")}>
+              {bulkBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveTxt}>Delete Permanently</Text>}
+            </Pressable>
+            <Pressable style={{ alignItems: "center", paddingVertical: 10 }} onPress={() => setConfirmDelete(false)}><Text style={{ color: C.muted, fontWeight: "700" }}>Cancel</Text></Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -201,6 +261,7 @@ function UserDetail({ userId, onBack, onToast }: { userId: string; onBack: () =>
   const [txns, setTxns] = useState<any>(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<any>({});
+  const [showEnroll, setShowEnroll] = useState(false);
 
   const loadDetail = useCallback(async () => {
     const d = await adminApi.userDetail(userId).catch(() => null);
@@ -245,6 +306,7 @@ function UserDetail({ userId, onBack, onToast }: { userId: string; onBack: () =>
           <View style={[styles.pill, { borderColor: MEMBERSHIP_C[detail.membership_type] || C.muted, alignSelf: "flex-start", marginTop: 6 }]}><Text style={[styles.pillTxt, { color: MEMBERSHIP_C[detail.membership_type] || C.muted }]}>{detail.membership_type}</Text></View>
         </View>
         <View style={styles.headBtns}>
+          <Pressable testID="user-enroll" style={[styles.headBtn, { borderColor: C.violet }]} onPress={() => setShowEnroll(true)}><Ionicons name="add-circle" size={15} color={C.violet} /><Text style={[styles.headBtnTxt, { color: C.violet }]}>Enroll</Text></Pressable>
           <Pressable testID="user-edit" style={styles.headBtn} onPress={() => setEditing((e) => !e)}><Ionicons name="create-outline" size={15} color={C.text} /><Text style={styles.headBtnTxt}>Edit</Text></Pressable>
           <Pressable testID="user-reset" style={styles.headBtn} onPress={reset}><Ionicons name="refresh" size={15} color={C.amber} /><Text style={[styles.headBtnTxt, { color: C.amber }]}>Reset</Text></Pressable>
           <Pressable testID="user-toggle-status" style={[styles.headBtn, { borderColor: suspended ? C.emerald : C.red }]} onPress={toggleStatus}>
@@ -275,11 +337,13 @@ function UserDetail({ userId, onBack, onToast }: { userId: string; onBack: () =>
           ) : (
             <View style={styles.grid2}>
               <KV k="Name" v={detail.name} />
-              <KV k="Mobile No" v={detail.phone || "-"} />
+              <KV k="Mobile Number" v={detail.mobile || "—"} />
               <KV k="Email" v={detail.email} />
               <KV k="User ID" v={detail.user_id} />
-              <KV k="Register By" v={detail.register_by} />
-              <KV k="Country" v={`${cc(detail.country)} ${detail.country}`} />
+              <KV k="Channel" v={detail.channel} vColor={C.blue} />
+              <KV k="Country / Region" v={`${cc(detail.country)} ${detail.country_region}`} />
+              <KV k="Date Subscribed" v={detail.subscribed_at ? fmtDate(detail.subscribed_at) : "—"} />
+              <KV k="Last Active On" v={detail.last_active ? fmtDate(detail.last_active) : "—"} />
               <KV k="Created At" v={fmtDate(detail.created_at)} />
               <KV k="Status" v={detail.status === "active" ? "Active" : "Suspended"} vColor={detail.status === "active" ? C.emerald : C.red} />
             </View>
@@ -366,6 +430,7 @@ function UserDetail({ userId, onBack, onToast }: { userId: string; onBack: () =>
         </View>
       ) : null}
       <View style={{ height: 40 }} />
+      <EnrollModal visible={showEnroll} onClose={() => setShowEnroll(false)} selectedIds={[userId]} onToast={onToast} onDone={() => { setShowEnroll(false); loadDetail(); }} />
     </View>
   );
 }
@@ -479,6 +544,17 @@ const Field = ({ label, children }: any) => (
 
 const styles = StyleSheet.create({
   title: { color: C.text, fontSize: 22, fontWeight: "800" },
+  dateRow: { flexDirection: "row", alignItems: "center", gap: SP.sm, marginBottom: SP.md, flexWrap: "wrap" },
+  dateInput: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 8, paddingHorizontal: 10, height: 36, color: C.text, fontSize: 12, minWidth: 130 },
+  exportBtn: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderColor: C.emerald, borderRadius: 9999, paddingHorizontal: 12, height: 36 },
+  exportTxt: { color: C.emerald, fontWeight: "700", fontSize: 12 },
+  bulkBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: C.violet + "18", borderWidth: 1, borderColor: C.violet, borderRadius: 10, paddingHorizontal: SP.md, paddingVertical: 8, marginBottom: SP.sm, flexWrap: "wrap", gap: SP.sm },
+  bulkTxt: { color: C.text, fontWeight: "800", fontSize: 13 },
+  bulkBtn: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderColor: C.border, backgroundColor: C.card, borderRadius: 9999, paddingHorizontal: 12, height: 34 },
+  bulkBtnTxt: { fontWeight: "700", fontSize: 12 },
+  chTag: { color: C.blue, fontSize: 11, fontWeight: "800", textTransform: "uppercase" },
+  centerOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", padding: SP.lg },
+  confirmCard: { backgroundColor: C.card, borderRadius: 16, padding: SP.lg, borderWidth: 1, borderColor: C.border },
   sub: { color: C.muted, fontSize: 12, marginTop: 2, marginBottom: SP.md },
   headRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: SP.sm, flexWrap: "wrap", gap: SP.sm },
   headActions: { flexDirection: "row", gap: SP.sm },

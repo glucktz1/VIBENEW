@@ -20,7 +20,11 @@ PROFILES = [
     ("ios", "Apple", "iPhone 15", "iOS 18", 4),
     ("web", "", "", "", 4),
 ]
-LOCATIONS = [("Tanzania", 20), ("Uganda", 6), ("Kenya", 5), ("Rwanda", 3), ("Zambia", 2)]
+LOCATIONS = [
+    ("Tanzania", "Dar es Salaam", 8), ("Tanzania", "Dodoma", 5), ("Tanzania", "Mwanza", 4),
+    ("Uganda", "Kampala", 5), ("Kenya", "Nairobi", 4), ("Rwanda", "Kigali", 3), ("Zambia", "Lusaka", 2),
+]
+CHANNELS = [("app", 8), ("web", 3)]
 
 
 def weighted(items):
@@ -36,18 +40,21 @@ async def main():
     updated = 0
     for u in users:
         platform, manuf, model, osv, _ = weighted(PROFILES)
-        loc, _ = weighted(LOCATIONS)
+        country, region, _ = weighted(LOCATIONS)
+        channel, _ = weighted(CHANNELS)
         upd = {
             "platform": platform,
             "device_type": platform,
             "device_manufacturer": manuf,
             "device_model": model,
             "os_version": osv,
-            "country": loc,
+            "country": country,
+            "region": region,
+            "register_channel": "web" if platform == "web" else channel,
         }
         await db.users.update_one({"email": u["email"]}, {"$set": upd})
         updated += 1
-    print(f"Backfilled device+location on {updated} users")
+    print(f"Backfilled device+location+channel on {updated} users")
 
 
 if __name__ == "__main__":

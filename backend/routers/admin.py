@@ -10,7 +10,7 @@ from auth_utils import require_admin
 from storage import put_object, get_object, APP_NAME
 from bson import ObjectId
 from bson.errors import InvalidId
-from datetime import timedelta
+from datetime import timedelta, datetime, timezone
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -323,12 +323,35 @@ async def _find_user_by_id(user_id: str) -> Optional[dict]:
         return await db.users.find_one({"user_id": user_id})
 
 
+def _channel(user: dict) -> str:
+    sub = user.get("subscription")
+    if isinstance(sub, dict) and sub.get("channel"):
+        return sub.get("channel")
+    ch = user.get("register_channel")
+    if ch:
+        return ch
+    plat = (user.get("platform") or "").lower()
+    if plat == "web":
+        return "web"
+    if plat in ("android", "ios"):
+        return "app"
+    return "app"
+
+
+def _region(user: dict) -> str:
+    c = user.get("country") or "Tanzania"
+    r = user.get("region")
+    return f"{c} / {r}" if r else c
+
+
 @router.get("/users")
 async def list_users(
     search: Optional[str] = None,
     membership_type: Optional[str] = None,   # all | Free | Premium
-    register_by: Optional[str] = None,        # all | Email | Mobile No
     status: Optional[str] = None,             # all | active | suspended
+    country: Optional[str] = None,            # all | <country>
+    registered_from: Optional[str] = None,    # ISO date
+    registered_to: Optional[str] = None,      # ISO date
     admin: dict = Depends(require_admin),
 ):
     query: dict = {"role": {"$in": ["customer", "user"]}}
@@ -338,7 +361,20 @@ async def list_users(
             {"name": {"$regex": search, "$options": "i"}},
             {"phone": {"$regex": search, "$options": "i"}},
         ]
-    users = await db.users.find(query, {"password_hash": 0}).sort("created_at", -1).limit(500).to_list(500)
+    if country and country != "all":
+        query["country"] = country
+    if registered_from or registered_to:
+        rng: dict = {}
+        try:
+            if registered_from:
+                rng["$gte"] = datetime.fromisoformat(registered_from).replace(tzinfo=timezone.utc)
+            if registered_to:
+                rng["$lte"] = datetime.fromisoformat(registered_to).replace(tzinfo=timezone.utc) + timedelta(days=1)
+        except ValueError:
+            rng = {}
+        if rng:
+            query["created_at"] = rng
+    users = await db.users.find(query, {"password_hash": 0}).sort("created_at", -1).limit(1000).to_list(1000)
 
     # last-active per user from play_events (one aggregation)
     last_map: dict = {}
@@ -353,16 +389,20 @@ async def list_users(
     for u in users:
         uid = _uid(u)
         sub = u.get("subscription") or {}
+        subscribed_at = sub.get("granted_at") if isinstance(sub, dict) else None
         row = {
             "user_id": uid,
             "id": u.get("email"),
             "name": u.get("name"),
             "email": u.get("email"),
-            "phone": u.get("phone"),
+            "mobile": u.get("phone") or "",
             "country": u.get("country") or "Tanzania",
+            "region": u.get("region") or "",
+            "country_region": _region(u),
+            "channel": _channel(u),
             "membership_type": _membership(u),
-            "register_by": _register_by(u),
             "current_plan": sub.get("plan_name") if isinstance(sub, dict) else None,
+            "subscribed_at": str(subscribed_at) if subscribed_at else None,
             "plan_expiry": str(sub.get("expires_at")) if isinstance(sub, dict) and sub.get("expires_at") else None,
             "last_active": str(last_map.get(uid)) if last_map.get(uid) else None,
             "status": _status(u),
@@ -371,12 +411,42 @@ async def list_users(
         }
         if membership_type and membership_type != "all" and row["membership_type"] != membership_type:
             continue
-        if register_by and register_by != "all" and row["register_by"] != register_by:
-            continue
         if status and status != "all" and row["status"] != status:
             continue
         out.append(row)
     return out
+
+
+@router.get("/users/countries")
+async def user_countries(admin: dict = Depends(require_admin)):
+    vals = await db.users.distinct("country", {"role": {"$in": ["customer", "user"]}})
+    return sorted([v for v in vals if v])
+
+
+class BulkActionIn(BaseModel):
+    user_ids: List[str]
+    action: str   # activate | deactivate | delete
+
+
+@router.post("/users/bulk-action")
+async def users_bulk_action(body: BulkActionIn, admin: dict = Depends(require_admin)):
+    if body.action not in ("activate", "deactivate", "delete"):
+        raise HTTPException(status_code=400, detail="Invalid action")
+    oids = []
+    for uid in body.user_ids:
+        try:
+            oids.append(ObjectId(uid))
+        except (InvalidId, TypeError):
+            pass
+    if not oids:
+        return {"ok": True, "affected": 0}
+    flt = {"_id": {"$in": oids}, "role": {"$in": ["customer", "user"]}}
+    if body.action == "delete":
+        res = await db.users.delete_many(flt)
+        return {"ok": True, "affected": res.deleted_count}
+    disabled = body.action == "deactivate"
+    res = await db.users.update_many(flt, {"$set": {"disabled": disabled, "status": "suspended" if disabled else "active"}})
+    return {"ok": True, "affected": res.modified_count}
 
 
 @router.get("/users/stats/summary")
@@ -410,17 +480,23 @@ async def get_user_detail(user_id: str, admin: dict = Depends(require_admin)):
     downloads_count = await db.downloads.count_documents({"user_id": uid})
     liked = len(u.get("liked_songs") or [])
     sub = u.get("subscription") if isinstance(u.get("subscription"), dict) else None
+    last_ev = await db.play_events.find_one({"user_id": uid}, {"_id": 0, "created_at": 1}, sort=[("created_at", -1)])
     return {
         "user_id": uid,
         "name": u.get("name"),
         "email": u.get("email"),
         "phone": u.get("phone"),
+        "mobile": u.get("phone") or "",
         "country": u.get("country") or "Tanzania",
-        "register_by": _register_by(u),
+        "region": u.get("region") or "",
+        "country_region": _region(u),
+        "channel": _channel(u),
         "membership_type": _membership(u),
         "status": _status(u),
         "is_premium": bool(u.get("is_premium")),
         "created_at": str(u.get("created_at")) if u.get("created_at") else None,
+        "subscribed_at": str(sub.get("granted_at")) if sub and sub.get("granted_at") else None,
+        "last_active": str(last_ev.get("created_at")) if last_ev and last_ev.get("created_at") else None,
         "subscription": sub,
         "device": {
             "platform": u.get("platform"),
@@ -579,6 +655,7 @@ async def enroll_users(body: EnrollIn, admin: dict = Depends(require_admin)):
             "granted_at": now_utc(),
             "expires_at": expires_at,
             "type": "admin_plan",
+            "channel": "admin",
         }
         user_set = {"is_premium": True, "subscription": sub}
     else:
@@ -588,6 +665,7 @@ async def enroll_users(body: EnrollIn, admin: dict = Depends(require_admin)):
             "granted_at": now_utc(),
             "expires_at": expires_at,
             "type": "free_hours",
+            "channel": "admin",
             "free_hours": body.free_hours,
             "free_period": body.free_period or "week",
         }

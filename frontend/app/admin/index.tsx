@@ -149,6 +149,7 @@ export default function AdminDashboard() {
   const [breakdown, setBreakdown] = useState<any>(null);
   const [deviceDist, setDeviceDist] = useState<any>(null);
   const [contentPerf, setContentPerf] = useState<any>(null);
+  const [freeMin, setFreeMin] = useState<any>(null);
   const [replayData, setReplayData] = useState<any>(null);
   const [replayPeriod, setReplayPeriod] = useState<"day" | "week" | "month">("week");
   const pollRef = useRef<any>(null);
@@ -197,8 +198,9 @@ export default function AdminDashboard() {
     if (tab === "analytics" && (analyticsSub === "users" || analyticsSub === "content" || analyticsSub === "replays" || analyticsSub === "devices") && !breakdown) adminApi.breakdown().then(setBreakdown).catch(() => {});
     if (tab === "analytics" && analyticsSub === "devices" && !deviceDist) adminApi.deviceDistribution().then(setDeviceDist).catch(() => {});
     if (tab === "analytics" && analyticsSub === "content" && !contentPerf) adminApi.contentPerformance().then(setContentPerf).catch(() => {});
+    if (tab === "analytics" && analyticsSub === "overview" && !freeMin) adminApi.freeMinutes().then(setFreeMin).catch(() => {});
     if (tab === "analytics" && analyticsSub === "revenue" && !revenue) adminApi.revenueOverview().then(setRevenue).catch(() => {});
-  }, [tab, txStatus, isAdmin, revenue, location, analyticsSub, dataUsage, breakdown, deviceDist, contentPerf]);
+  }, [tab, txStatus, isAdmin, revenue, location, analyticsSub, dataUsage, breakdown, deviceDist, contentPerf, freeMin]);
 
   // replays: refetch whenever period changes
   useEffect(() => {
@@ -471,6 +473,15 @@ export default function AdminDashboard() {
 
                 {analyticsSub === "overview" ? (
                   <>
+                    {freeMin ? (
+                      <View style={styles.freeBar}>
+                        <View style={[styles.statIcon, { backgroundColor: C.amber + "22" }]}><Ionicons name="gift" size={18} color={C.amber} /></View>
+                        <View style={{ flex: 1, marginLeft: SP.sm }}>
+                          <Text style={styles.freeVal}>{Number(freeMin.total_free_minutes).toLocaleString()} free minutes consumed</Text>
+                          <Text style={styles.freeSub}>{freeMin.active_grants} active grant(s) · {freeMin.users_consumed} users · promotional, excluded from revenue</Text>
+                        </View>
+                      </View>
+                    ) : null}
                     <View style={styles.statGrid}>
                       {[
                         { l: "Total Streams", v: enhanced.overview.total_streams, s: `${enhanced.overview.revenue_streams} revenue-eligible`, c: C.violet, i: "play" },
@@ -1290,6 +1301,9 @@ const styles = StyleSheet.create({
   bannerAccent: { fontWeight: "700", fontSize: 13, marginRight: 6 },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.emerald, marginRight: 6 },
   liveBar: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingVertical: 10, paddingHorizontal: SP.md, marginBottom: SP.md },
+  freeBar: { flexDirection: "row", alignItems: "center", backgroundColor: C.amber + "12", borderWidth: 1, borderColor: C.amber + "55", borderRadius: 12, padding: SP.md, marginBottom: SP.md },
+  freeVal: { color: C.text, fontWeight: "800", fontSize: 15 },
+  freeSub: { color: C.muted, fontSize: 11, marginTop: 2 },
   liveLabel: { color: C.emerald, fontWeight: "800", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5 },
   liveStat: { color: C.text, fontWeight: "800", fontSize: 14 },
   liveMuted: { color: C.muted, fontSize: 12 },
