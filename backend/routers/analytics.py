@@ -581,3 +581,119 @@ async def device_distribution(admin: dict = Depends(require_admin)):
         "os_version_distribution": dict(top_os_versions),
     }
 
+
+@router.get("/content-performance")
+async def content_performance(admin: dict = Depends(require_admin)):
+    """Album performance table + top songs (faithful to Gracefy's Content analytics tab)."""
+    avg_min = await _avg_song_minutes()
+    albums = await db.albums.find({}, {"_id": 0, "album_id": 1, "title": 1, "artist_name": 1, "total_plays": 1, "monetization_type": 1}).to_list(2000)
+    rows = []
+    for a in albums:
+        plays = a.get("total_plays")
+        if plays is None:
+            plays = await db.play_events.count_documents({"album_id": a.get("album_id")})
+        minutes = round(plays * avg_min)
+        rows.append({
+            "album_id": a.get("album_id"),
+            "title": a.get("title"),
+            "artist_name": a.get("artist_name") or "Unknown",
+            "monetization_type": a.get("monetization_type") or "standard",
+            "total_plays": plays,
+            "minutes_streamed": minutes,
+            "total_hours": round(minutes / 60.0, 1),
+            "avg_minutes_per_play": avg_min,
+            "revenue": plays * PER_PLAY,
+        })
+    rows.sort(key=lambda x: x["total_plays"], reverse=True)
+
+    songs = await db.songs.find({}, {"_id": 0, "song_id": 1, "title": 1, "artist_name": 1, "album_name": 1, "plays": 1}).sort("plays", -1).limit(15).to_list(15)
+    top_songs = [{
+        "song_id": s.get("song_id"),
+        "title": s.get("title"),
+        "artist": s.get("artist_name") or "Unknown",
+        "album": s.get("album_name") or "",
+        "plays": s.get("plays", 0),
+        "hours": round(s.get("plays", 0) * avg_min / 60.0, 1),
+    } for s in songs]
+
+    return {"albums": rows[:20], "top_songs": top_songs}
+
+
+@router.get("/replays")
+async def replays(period: str = "week", admin: dict = Depends(require_admin)):
+    """Replay analytics with day/week/month selector (faithful to Gracefy)."""
+    now = datetime.now(timezone.utc)
+    days = {"day": 1, "week": 7, "month": 30}.get(period, 7)
+    start = now - timedelta(days=days)
+    avg_min = await _avg_song_minutes()
+
+    events = await db.play_events.find(
+        {"created_at": {"$gte": start}, "user_id": {"$ne": None}, "song_id": {"$ne": None}},
+        {"_id": 0, "user_id": 1, "song_id": 1},
+    ).to_list(100000)
+
+    pair_counts: dict = {}
+    song_counts: dict = {}
+    song_users: dict = {}
+    for e in events:
+        pk = (e["user_id"], e["song_id"])
+        pair_counts[pk] = pair_counts.get(pk, 0) + 1
+        song_counts[e["song_id"]] = song_counts.get(e["song_id"], 0) + 1
+        song_users.setdefault(e["song_id"], set()).add(e["user_id"])
+
+    replay_pairs = {k: v for k, v in pair_counts.items() if v > 1}
+    users_who_replayed = len({u for (u, _s) in replay_pairs.keys()})
+    total_replay_sessions = sum(v - 1 for v in replay_pairs.values())
+    total_replay_minutes = round(total_replay_sessions * avg_min)
+
+    async def _song(sid):
+        return await db.songs.find_one({"song_id": sid}, {"_id": 0, "title": 1, "artist_name": 1})
+
+    # user replays (top 20 by replay_count)
+    user_replays = []
+    for (uid, sid), cnt in sorted(replay_pairs.items(), key=lambda x: x[1], reverse=True)[:20]:
+        s = await _song(sid)
+        u = await _find_user_email(uid)
+        user_replays.append({
+            "song_title": (s or {}).get("title") or "Unknown",
+            "user_name": u,
+            "replay_count": cnt,
+            "total_minutes": round(cnt * avg_min),
+        })
+
+    # top replayed songs
+    top_songs = []
+    for sid, plays in sorted(song_counts.items(), key=lambda x: x[1], reverse=True)[:15]:
+        if plays <= 1:
+            continue
+        s = await _song(sid)
+        uniq = len(song_users.get(sid, set())) or 1
+        top_songs.append({
+            "song_title": (s or {}).get("title") or "Unknown",
+            "artist_name": (s or {}).get("artist_name") or "Unknown",
+            "total_plays": plays,
+            "unique_users": uniq,
+            "replay_ratio": round(plays / uniq, 1),
+        })
+
+    return {
+        "period": period,
+        "summary": {
+            "users_who_replayed": users_who_replayed,
+            "total_replay_minutes": total_replay_minutes,
+            "total_replay_sessions": total_replay_sessions,
+        },
+        "user_replays": user_replays,
+        "top_replayed_songs": top_songs,
+    }
+
+
+async def _find_user_email(uid: str) -> str:
+    try:
+        from bson import ObjectId
+        u = await db.users.find_one({"_id": ObjectId(uid)}, {"_id": 0, "name": 1, "email": 1})
+    except Exception:
+        u = None
+    if not u:
+        return "Anonymous"
+    return u.get("name") or u.get("email") or "Anonymous"

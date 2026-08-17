@@ -43,8 +43,8 @@ export const api = {
 export const authApi = {
   login: (email: string, password: string) =>
     api.post<any>("/auth/login", { email, password }),
-  register: (email: string, password: string, name: string) =>
-    api.post<any>("/auth/register", { email, password, name }),
+  register: (email: string, password: string, name: string, device?: any) =>
+    api.post<any>("/auth/register", { email, password, name, ...(device || {}) }),
   me: () => api.get<any>("/auth/me"),
   deleteAccount: () => api.del<any>("/auth/me"),
 };
@@ -88,7 +88,15 @@ export const billingApi = {
 
 export const adminApi = {
   stats: () => api.get<any>("/admin/stats"),
-  users: () => api.get<any[]>("/admin/users"),
+  users: (qs = "") => api.get<any[]>(`/admin/users${qs}`),
+  userStats: () => api.get<any>("/admin/users/stats/summary"),
+  userDetail: (id: string) => api.get<any>(`/admin/users/${id}`),
+  userHistory: (id: string) => api.get<any>(`/admin/users/${id}/listening-history`),
+  userDownloads: (id: string) => api.get<any>(`/admin/users/${id}/downloads`),
+  userTransactions: (id: string) => api.get<any>(`/admin/users/${id}/transactions`),
+  updateUser: (id: string, b: any) => api.put<any>(`/admin/users/${id}`, b),
+  userStatus: (id: string, status: string) => api.patch<any>(`/admin/users/${id}/status`, { status }),
+  resetUser: (id: string) => api.post<any>(`/admin/users/${id}/reset`, {}),
   albums: () => api.get<any[]>("/admin/albums"),
   createAlbum: (b: any) => api.post<any>("/admin/albums", b),
   updateAlbum: (id: string, b: any) => api.put<any>(`/admin/albums/${id}`, b),
@@ -145,6 +153,8 @@ export const adminApi = {
   },
   dataUsage: (days = 30) => api.get<any>(`/analytics/data-usage?days=${days}`),
   breakdown: () => api.get<any>("/analytics/breakdown"),
+  contentPerformance: () => api.get<any>("/analytics/content-performance"),
+  replays: (period = "week") => api.get<any>(`/analytics/replays?period=${period}`),
   deviceDistribution: () => api.get<any>("/analytics/device-distribution"),
   settings: () => api.get<any>("/admin/settings"),
   updateSettings: (b: any) => api.put<any>("/admin/settings", b),

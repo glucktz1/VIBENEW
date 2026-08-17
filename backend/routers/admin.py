@@ -8,6 +8,8 @@ import uuid
 from db import db, now_utc
 from auth_utils import require_admin
 from storage import put_object, get_object, APP_NAME
+from bson import ObjectId
+from bson.errors import InvalidId
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -295,12 +297,248 @@ async def delete_category(category_id: str, admin: dict = Depends(require_admin)
 
 
 # -------- Users --------
+def _uid(user: dict) -> str:
+    return str(user.get("_id"))
+
+
+def _register_by(user: dict) -> str:
+    return "Mobile No" if user.get("phone") else "Email"
+
+
+def _membership(user: dict) -> str:
+    return "Premium" if user.get("is_premium") else "Free"
+
+
+def _status(user: dict) -> str:
+    if user.get("disabled"):
+        return "suspended"
+    return user.get("status") or "active"
+
+
+async def _find_user_by_id(user_id: str) -> Optional[dict]:
+    try:
+        return await db.users.find_one({"_id": ObjectId(user_id)})
+    except (InvalidId, TypeError):
+        return await db.users.find_one({"user_id": user_id})
+
+
 @router.get("/users")
-async def list_users(admin: dict = Depends(require_admin)):
-    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("created_at", -1).limit(200).to_list(200)
+async def list_users(
+    search: Optional[str] = None,
+    membership_type: Optional[str] = None,   # all | Free | Premium
+    register_by: Optional[str] = None,        # all | Email | Mobile No
+    status: Optional[str] = None,             # all | active | suspended
+    admin: dict = Depends(require_admin),
+):
+    query: dict = {"role": {"$in": ["customer", "user"]}}
+    if search:
+        query["$or"] = [
+            {"email": {"$regex": search, "$options": "i"}},
+            {"name": {"$regex": search, "$options": "i"}},
+            {"phone": {"$regex": search, "$options": "i"}},
+        ]
+    users = await db.users.find(query, {"password_hash": 0}).sort("created_at", -1).limit(500).to_list(500)
+
+    # last-active per user from play_events (one aggregation)
+    last_map: dict = {}
+    agg = await db.play_events.aggregate([
+        {"$match": {"user_id": {"$ne": None}}},
+        {"$group": {"_id": "$user_id", "last": {"$max": "$created_at"}}},
+    ]).to_list(100000)
+    for a in agg:
+        last_map[a["_id"]] = a["last"]
+
+    out = []
     for u in users:
-        u["id"] = u.get("email")
-    return users
+        uid = _uid(u)
+        sub = u.get("subscription") or {}
+        row = {
+            "user_id": uid,
+            "id": u.get("email"),
+            "name": u.get("name"),
+            "email": u.get("email"),
+            "phone": u.get("phone"),
+            "country": u.get("country") or "Tanzania",
+            "membership_type": _membership(u),
+            "register_by": _register_by(u),
+            "current_plan": sub.get("plan_name") if isinstance(sub, dict) else None,
+            "plan_expiry": str(sub.get("expires_at")) if isinstance(sub, dict) and sub.get("expires_at") else None,
+            "last_active": str(last_map.get(uid)) if last_map.get(uid) else None,
+            "status": _status(u),
+            "is_premium": bool(u.get("is_premium")),
+            "created_at": str(u.get("created_at")) if u.get("created_at") else None,
+        }
+        if membership_type and membership_type != "all" and row["membership_type"] != membership_type:
+            continue
+        if register_by and register_by != "all" and row["register_by"] != register_by:
+            continue
+        if status and status != "all" and row["status"] != status:
+            continue
+        out.append(row)
+    return out
+
+
+@router.get("/users/stats/summary")
+async def user_stats_summary(admin: dict = Depends(require_admin)):
+    base = {"role": {"$in": ["customer", "user"]}}
+    total = await db.users.count_documents(base)
+    suspended = await db.users.count_documents({**base, "disabled": True})
+    premium = await db.users.count_documents({**base, "is_premium": True})
+    active = total - suspended
+    free = total - premium
+    trial = await db.users.count_documents({**base, "subscription.trial": True})
+    return {
+        "total_users": total,
+        "active": active,
+        "premium": premium,
+        "free": free,
+        "trial": trial,
+        "suspended": suspended,
+    }
+
+
+@router.get("/users/{user_id}")
+async def get_user_detail(user_id: str, admin: dict = Depends(require_admin)):
+    u = await _find_user_by_id(user_id)
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    uid = _uid(u)
+    total_plays = await db.play_events.count_documents({"user_id": uid})
+    tx = await db.transactions.find({"user_id": uid}, {"_id": 0, "amount": 1, "status": 1}).to_list(1000)
+    total_spent = sum(t.get("amount", 0) for t in tx if t.get("status") == "completed")
+    downloads_count = await db.downloads.count_documents({"user_id": uid})
+    liked = len(u.get("liked_songs") or [])
+    sub = u.get("subscription") if isinstance(u.get("subscription"), dict) else None
+    return {
+        "user_id": uid,
+        "name": u.get("name"),
+        "email": u.get("email"),
+        "phone": u.get("phone"),
+        "country": u.get("country") or "Tanzania",
+        "register_by": _register_by(u),
+        "membership_type": _membership(u),
+        "status": _status(u),
+        "is_premium": bool(u.get("is_premium")),
+        "created_at": str(u.get("created_at")) if u.get("created_at") else None,
+        "subscription": sub,
+        "device": {
+            "platform": u.get("platform"),
+            "manufacturer": u.get("device_manufacturer"),
+            "model": u.get("device_model"),
+            "os_version": u.get("os_version"),
+        },
+        "analytics": {
+            "total_plays": total_plays,
+            "total_spent": total_spent,
+            "downloads_count": downloads_count,
+            "liked_songs_count": liked,
+            "transactions_count": len(tx),
+        },
+    }
+
+
+@router.get("/users/{user_id}/listening-history")
+async def user_listening_history(user_id: str, limit: int = 50, admin: dict = Depends(require_admin)):
+    u = await _find_user_by_id(user_id)
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    uid = _uid(u)
+    events = await db.play_events.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    history = []
+    for e in events:
+        song = await db.songs.find_one({"song_id": e.get("song_id")}, {"_id": 0, "title": 1, "artist_name": 1, "thumbnail": 1, "duration": 1})
+        history.append({
+            "song_id": e.get("song_id"),
+            "song_title": (song or {}).get("title") or "Unknown Track",
+            "artist_name": (song or {}).get("artist_name") or "Unknown Artist",
+            "thumbnail": (song or {}).get("thumbnail"),
+            "duration": (song or {}).get("duration"),
+            "is_guest": e.get("is_guest", False),
+            "listened_at": str(e.get("created_at")) if e.get("created_at") else None,
+        })
+    total = await db.play_events.count_documents({"user_id": uid})
+    return {"history": history, "total": total}
+
+
+@router.get("/users/{user_id}/downloads")
+async def user_downloads(user_id: str, admin: dict = Depends(require_admin)):
+    u = await _find_user_by_id(user_id)
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    uid = _uid(u)
+    rows = await db.downloads.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).limit(200).to_list(200)
+    out = []
+    for d in rows:
+        song = await db.songs.find_one({"song_id": d.get("song_id")}, {"_id": 0, "title": 1, "artist_name": 1, "thumbnail": 1})
+        out.append({
+            "song_id": d.get("song_id"),
+            "title": (song or {}).get("title") or "Unknown Track",
+            "artist_name": (song or {}).get("artist_name") or "Unknown Artist",
+            "thumbnail": (song or {}).get("thumbnail"),
+            "downloaded_at": str(d.get("created_at")) if d.get("created_at") else None,
+        })
+    return {"downloads": out, "total": len(out)}
+
+
+@router.get("/users/{user_id}/transactions")
+async def user_transactions(user_id: str, admin: dict = Depends(require_admin)):
+    u = await _find_user_by_id(user_id)
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    uid = _uid(u)
+    rows = await db.transactions.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).limit(200).to_list(200)
+    for r in rows:
+        if r.get("created_at"):
+            r["created_at"] = str(r["created_at"])
+        r["gateway"] = r.get("gateway", "azampay_simulated")
+    total_spent = sum(r.get("amount", 0) for r in rows if r.get("status") == "completed")
+    return {"transactions": rows, "total": len(rows), "total_spent": total_spent}
+
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    country: Optional[str] = None
+
+
+@router.put("/users/{user_id}")
+async def update_user(user_id: str, body: UserUpdate, admin: dict = Depends(require_admin)):
+    u = await _find_user_by_id(user_id)
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    upd = {k: v for k, v in body.dict().items() if v is not None}
+    if not upd:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    await db.users.update_one({"_id": u["_id"]}, {"$set": upd})
+    return {"ok": True, **upd}
+
+
+@router.patch("/users/{user_id}/status")
+async def set_user_status(user_id: str, body: dict, admin: dict = Depends(require_admin)):
+    status = body.get("status")
+    if status not in ("active", "suspended", "inactive"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+    u = await _find_user_by_id(user_id)
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    disabled = status in ("suspended", "inactive")
+    await db.users.update_one({"_id": u["_id"]}, {"$set": {"disabled": disabled, "status": "active" if not disabled else "suspended"}})
+    return {"ok": True, "status": "active" if not disabled else "suspended"}
+
+
+@router.post("/users/{user_id}/reset")
+async def reset_user(user_id: str, admin: dict = Depends(require_admin)):
+    """Reset a user's usage counters & subscription back to Free (faithful to Gracefy 'reset')."""
+    u = await _find_user_by_id(user_id)
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    await db.users.update_one({"_id": u["_id"]}, {"$set": {
+        "is_premium": False,
+        "subscription": None,
+        "guest_plays": 0,
+        "skip_count": 0,
+    }})
+    return {"ok": True}
 
 
 # -------- Plans --------

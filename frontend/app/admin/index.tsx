@@ -12,6 +12,7 @@ import { adminApi } from "@/src/services/api";
 import { adminArtistApi } from "@/src/services/artistApi";
 import ContentManager from "@/src/components/admin/ContentManager";
 import CategoriesManager from "@/src/components/admin/CategoriesManager";
+import UsersManager from "@/src/components/admin/UsersManager";
 import SettingsManager from "@/src/components/admin/SettingsManager";
 import AdvertisingManager from "@/src/components/admin/AdvertisingManager";
 import RecommendationManager from "@/src/components/admin/RecommendationManager";
@@ -121,7 +122,6 @@ export default function AdminDashboard() {
   const { isAdmin, isGuest, loading: authLoading, user, logout } = useAuth();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 900;
-  const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"overview" | "content" | "users" | "artists" | "withdrawals" | "analytics" | "revenue" | "transactions" | "location" | "categories" | "settings" | "advertising" | "recommendations" | "control">("overview");
   const [controlView, setControlView] = useState("roles");
@@ -148,12 +148,14 @@ export default function AdminDashboard() {
   const [dataUsage, setDataUsage] = useState<any>(null);
   const [breakdown, setBreakdown] = useState<any>(null);
   const [deviceDist, setDeviceDist] = useState<any>(null);
+  const [contentPerf, setContentPerf] = useState<any>(null);
+  const [replayData, setReplayData] = useState<any>(null);
+  const [replayPeriod, setReplayPeriod] = useState<"day" | "week" | "month">("week");
   const pollRef = useRef<any>(null);
 
   const load = useCallback(async () => {
     try {
-      const [u, ov, tr, dm, rt, dl, ll, arts, wds] = await Promise.all([
-        adminApi.users().catch(() => []),
+      const [ov, tr, dm, rt, dl, ll, arts, wds] = await Promise.all([
         adminApi.overview().catch(() => null),
         adminApi.trends().catch(() => null),
         adminApi.demographics().catch(() => null),
@@ -163,7 +165,6 @@ export default function AdminDashboard() {
         adminArtistApi.list().catch(() => []),
         adminArtistApi.withdrawals().catch(() => []),
       ]);
-      setUsers(u);
       setOverview(ov); setTrends(tr); setDemographics(dm);
       setRealtime(rt); setDownloadStats(dl); setLiveListeners(ll);
       setArtistsList(arts); setWithdrawalsList(wds);
@@ -195,8 +196,15 @@ export default function AdminDashboard() {
     if (tab === "analytics" && analyticsSub === "datausage" && !dataUsage) adminApi.dataUsage(30).then(setDataUsage).catch(() => {});
     if (tab === "analytics" && (analyticsSub === "users" || analyticsSub === "content" || analyticsSub === "replays" || analyticsSub === "devices") && !breakdown) adminApi.breakdown().then(setBreakdown).catch(() => {});
     if (tab === "analytics" && analyticsSub === "devices" && !deviceDist) adminApi.deviceDistribution().then(setDeviceDist).catch(() => {});
+    if (tab === "analytics" && analyticsSub === "content" && !contentPerf) adminApi.contentPerformance().then(setContentPerf).catch(() => {});
     if (tab === "analytics" && analyticsSub === "revenue" && !revenue) adminApi.revenueOverview().then(setRevenue).catch(() => {});
-  }, [tab, txStatus, isAdmin, revenue, location, analyticsSub, dataUsage, breakdown, deviceDist]);
+  }, [tab, txStatus, isAdmin, revenue, location, analyticsSub, dataUsage, breakdown, deviceDist, contentPerf]);
+
+  // replays: refetch whenever period changes
+  useEffect(() => {
+    if (!isAdmin || tab !== "analytics" || analyticsSub !== "replays") return;
+    adminApi.replays(replayPeriod).then(setReplayData).catch(() => {});
+  }, [tab, analyticsSub, replayPeriod, isAdmin]);
 
   // fetch enhanced analytics on tab open + whenever the period filter changes
   useEffect(() => {
@@ -324,12 +332,12 @@ export default function AdminDashboard() {
         </Pressable>
       </View>
 
-      {(tab === "overview" || tab === "content" || tab === "users") ? (
+      {(tab === "overview" || tab === "content") ? (
         <View style={styles.segment}>
-          {(["overview", "content", "users"] as const).map((t) => (
+          {(["overview", "content"] as const).map((t) => (
             <Pressable key={t} testID={`admin-tab-${t}`} style={[styles.segBtn, tab === t && styles.segActive]} onPress={() => setTab(t)}>
               <Text style={[styles.segText, tab === t && styles.segTextActive]}>
-                {t === "overview" ? "Dashboard" : t === "content" ? "Content" : "Users"}
+                {t === "overview" ? "Dashboard" : "Content"}
               </Text>
             </Pressable>
           ))}
@@ -365,24 +373,7 @@ export default function AdminDashboard() {
 
           {tab === "control" ? <ControlManager onToast={flash} initial={controlView} /> : null}
 
-          {tab === "users" ? (
-            <>
-              <Text style={styles.sectionTitle}>Watumiaji ({users.length})</Text>
-              {users.map((u, i) => (
-                <View key={i} style={styles.contentRow}>
-                  <View style={styles.userAvatar}>
-                    <Ionicons name="person" size={16} color="#fff" />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: SP.sm }}>
-                    <Text style={styles.topTitle} numberOfLines={1}>{u.name || u.email}</Text>
-                    <Text style={styles.topSub} numberOfLines={1}>{u.email}</Text>
-                  </View>
-                  {u.is_premium ? <Ionicons name="star" size={16} color={C.amber} /> : null}
-                  {u.role !== "customer" ? <Text style={styles.roleBadge}>{u.role}</Text> : null}
-                </View>
-              ))}
-            </>
-          ) : null}
+          {tab === "users" ? <UsersManager onToast={flash} /> : null}
 
           {tab === "artists" ? (
             <>
@@ -628,43 +619,101 @@ export default function AdminDashboard() {
                     </>
                   )
                 ) : analyticsSub === "content" ? (
-                  !breakdown ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
+                  !contentPerf ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
                     <>
-                      <View style={styles.statGrid}>
-                        {[
-                          { l: "Total Albums", v: Number(breakdown.content.total_albums).toLocaleString(), c: C.violet, i: "albums" },
-                          { l: "Total Songs", v: Number(breakdown.content.total_songs).toLocaleString(), c: C.blue, i: "musical-notes" },
-                        ].map((s, i) => (
-                          <View key={i} style={styles.statCard}>
-                            <View style={[styles.statIcon, { backgroundColor: s.c + "22" }]}><Ionicons name={s.i as any} size={20} color={s.c} /></View>
-                            <Text style={styles.statValue} numberOfLines={1}>{s.v}</Text>
-                            <Text style={styles.statLabel}>{s.l}</Text>
-                          </View>
-                        ))}
-                      </View>
-                      <ChartCard icon="albums" iconColor={C.violet} title="Top Albums by Plays">
-                        {breakdown.content.top_albums?.length ? breakdown.content.top_albums.map((a: any, i: number) => (
+                      <ChartCard icon="disc" iconColor={C.emerald} title="Album Performance">
+                        {contentPerf.albums?.length ? (
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                            <View style={{ minWidth: 640 }}>
+                              <View style={styles.tblHead}>
+                                <Text style={[styles.tblTh, { width: 30 }]}>#</Text>
+                                <Text style={[styles.tblTh, { width: 170 }]}>Album</Text>
+                                <Text style={[styles.tblTh, { width: 110 }]}>Artist</Text>
+                                <Text style={[styles.tblTh, { width: 70, textAlign: "right" }]}>Plays</Text>
+                                <Text style={[styles.tblTh, { width: 90, textAlign: "right" }]}>Minutes</Text>
+                                <Text style={[styles.tblTh, { width: 60, textAlign: "right" }]}>Hours</Text>
+                                <Text style={[styles.tblTh, { width: 100, textAlign: "right" }]}>Revenue</Text>
+                              </View>
+                              {contentPerf.albums.map((a: any, i: number) => (
+                                <View key={a.album_id} style={styles.tblRow}>
+                                  <Text style={[styles.tblTd, { width: 30, color: C.muted }]}>{i + 1}</Text>
+                                  <Text style={[styles.tblTd, { width: 170, color: C.text, fontWeight: "700" }]} numberOfLines={1}>{a.title}</Text>
+                                  <Text style={[styles.tblTd, { width: 110 }]} numberOfLines={1}>{a.artist_name}</Text>
+                                  <Text style={[styles.tblTd, { width: 70, textAlign: "right", color: C.violet, fontWeight: "700" }]}>{Number(a.total_plays).toLocaleString()}</Text>
+                                  <Text style={[styles.tblTd, { width: 90, textAlign: "right", color: C.emerald, fontWeight: "700" }]}>{Number(a.minutes_streamed).toLocaleString()}</Text>
+                                  <Text style={[styles.tblTd, { width: 60, textAlign: "right" }]}>{a.total_hours}h</Text>
+                                  <Text style={[styles.tblTd, { width: 100, textAlign: "right", color: C.amber, fontWeight: "700" }]}>TZS {Number(a.revenue).toLocaleString()}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          </ScrollView>
+                        ) : <Empty />}
+                      </ChartCard>
+                      <ChartCard icon="musical-notes" iconColor={C.violet} title="Top Performing Songs">
+                        {contentPerf.top_songs?.length ? contentPerf.top_songs.map((s: any, i: number) => (
                           <View key={i} style={styles.rankRow}>
                             <Text style={styles.locRank}>{i + 1}.</Text>
-                            <Text style={styles.locName} numberOfLines={1}>{a.title}</Text>
-                            <Text style={styles.locVal}>{Number(a.plays).toLocaleString()} ▶</Text>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.locName} numberOfLines={1}>{s.title}</Text>
+                              <Text style={styles.songMeta} numberOfLines={1}>{s.artist}{s.album ? ` · ${s.album}` : ""}</Text>
+                            </View>
+                            <Text style={styles.devVal}>{Number(s.plays).toLocaleString()} ▶  ·  {s.hours}h</Text>
                           </View>
                         )) : <Empty />}
                       </ChartCard>
                     </>
                   )
                 ) : analyticsSub === "replays" ? (
-                  !breakdown ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
-                    <ChartCard icon="repeat" iconColor={C.pink} title="Most Replayed Songs" desc="Ranked by total plays">
-                      {breakdown.replays.top?.length ? breakdown.replays.top.map((s: any, i: number) => (
-                        <View key={i} style={styles.rankRow}>
-                          <Text style={styles.locRank}>{i + 1}.</Text>
-                          <Text style={styles.locName} numberOfLines={1}>{s.title}</Text>
-                          <Text style={styles.locVal}>{Number(s.plays).toLocaleString()} ▶</Text>
+                  <>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: SP.md }}>
+                      {(["day", "week", "month"] as const).map((p) => (
+                        <Pressable key={p} testID={`replay-period-${p}`} style={[styles.filterChip, replayPeriod === p && styles.filterChipActive]} onPress={() => setReplayPeriod(p)}>
+                          <Text style={[styles.filterChipText, replayPeriod === p && { color: "#fff" }]}>{p === "day" ? "Today" : p === "week" ? "This Week" : "This Month"}</Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                    {!replayData ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
+                      <>
+                        <View style={styles.statGrid}>
+                          {[
+                            { l: "Users Who Replayed", v: replayData.summary.users_who_replayed, c: C.amber, i: "people" },
+                            { l: "Replay Minutes", v: Number(replayData.summary.total_replay_minutes).toLocaleString(), c: C.blue, i: "time" },
+                            { l: "Replay Sessions", v: replayData.summary.total_replay_sessions, c: C.violet, i: "repeat" },
+                          ].map((s, i) => (
+                            <View key={i} style={styles.statCard}>
+                              <View style={[styles.statIcon, { backgroundColor: s.c + "22" }]}><Ionicons name={s.i as any} size={20} color={s.c} /></View>
+                              <Text style={styles.statValue} numberOfLines={1}>{s.v}</Text>
+                              <Text style={styles.statLabel}>{s.l}</Text>
+                            </View>
+                          ))}
                         </View>
-                      )) : <Empty />}
-                    </ChartCard>
-                  )
+                        <ChartCard icon="people" iconColor={C.amber} title="Users Who Replayed Same Song">
+                          {replayData.user_replays?.length ? replayData.user_replays.map((r: any, i: number) => (
+                            <View key={i} style={styles.rankRow}>
+                              <View style={styles.replayBadge}><Text style={styles.replayBadgeTxt}>{r.replay_count}x</Text></View>
+                              <View style={{ flex: 1, marginLeft: 8 }}>
+                                <Text style={styles.locName} numberOfLines={1}>{r.song_title}</Text>
+                                <Text style={styles.songMeta} numberOfLines={1}>{r.user_name}</Text>
+                              </View>
+                              <Text style={styles.devVal}>{r.total_minutes} min</Text>
+                            </View>
+                          )) : <Empty />}
+                        </ChartCard>
+                        <ChartCard icon="repeat" iconColor={C.pink} title="Most Replayed Songs">
+                          {replayData.top_replayed_songs?.length ? replayData.top_replayed_songs.map((s: any, i: number) => (
+                            <View key={i} style={styles.rankRow}>
+                              <Text style={styles.locRank}>{i + 1}.</Text>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.locName} numberOfLines={1}>{s.song_title}</Text>
+                                <Text style={styles.songMeta} numberOfLines={1}>{s.artist_name} · {s.unique_users} users · {s.replay_ratio}x avg</Text>
+                              </View>
+                              <Text style={styles.devVal}>{Number(s.total_plays).toLocaleString()} ▶</Text>
+                            </View>
+                          )) : <Empty />}
+                        </ChartCard>
+                      </>
+                    )}
+                  </>
                 ) : analyticsSub === "devices" ? (
                   !deviceDist ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
                     <>
@@ -1261,6 +1310,13 @@ const styles = StyleSheet.create({
   statSub: { color: C.muted, fontSize: 11, marginTop: 2 },
   secHdr: { color: C.text, fontSize: 15, fontWeight: "800", marginBottom: SP.sm },
   devVal: { color: C.sub, fontSize: 12, fontWeight: "700", marginLeft: 8 },
+  songMeta: { color: C.muted, fontSize: 11, marginTop: 1 },
+  tblHead: { flexDirection: "row", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border },
+  tblTh: { color: C.muted, fontSize: 10, fontWeight: "800", textTransform: "uppercase", paddingRight: 6 },
+  tblRow: { flexDirection: "row", alignItems: "center", paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: "rgba(39,39,42,0.5)" },
+  tblTd: { color: C.sub, fontSize: 12, paddingRight: 6 },
+  replayBadge: { width: 34, height: 34, borderRadius: 17, backgroundColor: C.amber + "22", alignItems: "center", justifyContent: "center" },
+  replayBadgeTxt: { color: C.amber, fontWeight: "800", fontSize: 12 },
 
   secGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginTop: SP.xs, marginBottom: SP.md },
   secCard: { width: "48.5%", backgroundColor: "rgba(24,24,27,0.4)", borderRadius: 10, padding: SP.md, marginBottom: SP.sm, borderWidth: 1, borderColor: "rgba(39,39,42,0.5)" },

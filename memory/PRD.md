@@ -182,3 +182,26 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - Content sub-tab: Gracefy has album performance TABLE (plays/minutes/hours/avg-per-play/revenue) + top songs list — ours shows counts+top albums only
 - Replays sub-tab: Gracefy has day/week/month period selector + users-who-replayed + summary cards — ours shows top replayed list only
 - Users sub-tab: could add navigation/section toggle from Gracefy
+
+## Session 16d — Customers list + User Detail page + real device capture (Gracefy parity)
+### Backend (routers/admin.py) — user_id = str(_id); play_events/transactions link by str(_id)
+- GET /admin/users (search + membership/register_by/status filters; returns user_id, country, register_by, membership, status, last_active)
+- GET /admin/users/stats/summary (total/active/premium/free/trial/suspended)
+- GET /admin/users/{id} (+analytics: plays/spent/downloads/liked/txn count + device{})
+- GET /admin/users/{id}/listening-history | /downloads | /transactions
+- PUT /admin/users/{id} (edit name/phone/country); PATCH /admin/users/{id}/status (activate/deactivate via disabled); POST /admin/users/{id}/reset (→Free, clears counters)
+### Device capture at signup
+- auth.py register accepts platform/device_manufacturer/device_model/os_version; stored on user
+- Frontend AuthContext.register gathers via expo-device (installed) + Platform.OS and sends; feeds Devices analytics + user Devices tab
+### Frontend
+- NEW src/components/admin/UsersManager.tsx: Customers list (6 stat cards, search, Type/Method/Status filters, horizontal-scroll table) + UserDetail view (header w/ Edit/Reset/Deactivate + 6 tabs: Profile/Membership/Listening History/Downloads/Transactions/Devices)
+- admin/index.tsx: removed "Users" from top segment toggle (now only Dashboard|Content); App Users sidebar → UsersManager; removed dead users state
+- Verified in 1440px desktop: list + detail + device tab all render
+### STILL PENDING (next): Content analytics parity (album performance table), Replays parity (period selector + users-who-replayed), Users analytics section toggle
+
+## Session 16e — Content & Replays analytics parity (Gracefy)
+- Backend: GET /api/analytics/content-performance (album table: plays/minutes/hours/avg-per-play/revenue + top_songs), GET /api/analytics/replays?period=day|week|month (summary users_who_replayed/replay_minutes/replay_sessions + user_replays + top_replayed_songs)
+- api.ts: contentPerformance(), replays(period)
+- admin/index.tsx: Content sub-tab now shows Album Performance TABLE + Top Performing Songs; Replays sub-tab has Today/Week/Month selector + summary cards + Users Who Replayed + Most Replayed Songs; new styles (tbl*, songMeta, replayBadge)
+- Verified in 1440px desktop: both render with real data; replay period switch works
+- ALL requested items this thread DONE: Content parity ✅ Replays parity ✅ Real device capture ✅ Customers list + User detail ✅ removed Content Users toggle ✅

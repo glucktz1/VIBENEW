@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { Platform } from "react-native";
+import * as Device from "expo-device";
 import { storage } from "@/src/utils/storage";
 import { authApi, TOKEN_KEY } from "@/src/services/api";
 
@@ -61,7 +63,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const register = useCallback(async (email: string, password: string, name: string) => {
-    const res = await authApi.register(email, password, name);
+    const device = {
+      platform: Platform.OS,
+      device_manufacturer: Device.manufacturer || Device.brand || "",
+      device_model: Device.modelName || Device.deviceName || "",
+      os_version: Device.osVersion || "",
+    };
+    const res = await authApi.register(email, password, name, device);
     await storage.secureSet(TOKEN_KEY, res.access_token);
     setUser(res.user);
   }, []);

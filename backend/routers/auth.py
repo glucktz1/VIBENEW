@@ -18,6 +18,10 @@ class RegisterIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=128)
     name: str = Field(min_length=1, max_length=80)
+    platform: str | None = None
+    device_manufacturer: str | None = None
+    device_model: str | None = None
+    os_version: str | None = None
 
 
 class LoginIn(BaseModel):
@@ -36,6 +40,11 @@ async def register(body: RegisterIn):
         "subscription": None,
         "liked_songs": [],
         "disabled": False,
+        "platform": (body.platform or "unknown").lower(),
+        "device_type": (body.platform or "unknown").lower(),
+        "device_manufacturer": body.device_manufacturer or "",
+        "device_model": body.device_model or "",
+        "os_version": body.os_version or "",
         "created_at": now_utc(),
     }
     try:
