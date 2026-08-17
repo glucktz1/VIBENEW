@@ -29,6 +29,7 @@ DEFAULT_SETTINGS = {
     "free_user_skip_limit": 6,
     "free_user_daily_songs": 20,
     "guest_play_limit": 3,
+    "free_prompt_ringtone_pct": 50,   # % of times FREE users see ringtone prompt vs contribute
 }
 
 

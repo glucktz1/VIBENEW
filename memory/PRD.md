@@ -248,3 +248,15 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - auth_utils.public_user now returns created_at (used for "just joined" detection)
 - Ringtone tap shows Alert (Android/iOS) noting it applies on the installed native build (real ringtone assignment needs WRITE_SETTINGS/native build — not testable in Expo Go/web)
 - Verified: registered a new user, played a song -> mini player shows "Weka Wimbo huu muito wa simu yangu" (MINI_RINGTONE True); guests show no banner
+
+## Session 16j — Prompt alternation, full-player bottom safe-area, album thumbnails
+### Alternating free-user prompts (payment vs ringtone) — admin controlled
+- settings.py: new key free_prompt_ringtone_pct (default 50); billing.py /billing-status now returns it publicly
+- PlayerContext exposes promptRingtonePct (from billing state)
+- PlayerPromptBanner usePlayerPrompt: guests none; premium/just-joined always ringtone; FREE users alternate per song via deterministic hash(song_id)%100 < pct => ringtone else contribute (works web+native, no randomness flicker mid-song)
+- SettingsManager: added "Free User Ringtone Prompt %" stepper (step 10, min 0, max 100; NUMS type gained optional max + inc clamps)
+- Verified: admin PUT pct=30 reflected in public billing-status
+### Full player bottom controls no longer hidden behind device nav bar
+- player.tsx: useSafeAreaInsets; controls container paddingBottom = max(insets.bottom,12)+SPACING.md (fixes web+native overlap); verified controls fully visible
+### Album listing thumbnails
+- album/[id].tsx: dropped index prop to SongRow so it renders song/album thumbnail instead of number; thumbnail falls back to album cover; verified

@@ -13,12 +13,13 @@ const TOGGLES: { key: string; label: string; desc: string }[] = [
   { key: "free_unlimited_songs", label: "Unlimited song access (Free)", desc: "Remove daily song cap for free users" },
   { key: "phone_otp_enabled", label: "Phone OTP", desc: "Enable phone number OTP verification" },
 ];
-const NUMS: { key: string; label: string; step: number; min: number }[] = [
+const NUMS: { key: string; label: string; step: number; min: number; max?: number }[] = [
   { key: "min_play_duration", label: "Minimum Play Duration (sec)", step: 5, min: 0 },
   { key: "replay_limit_per_song", label: "Replay Limit Per Song", step: 1, min: 0 },
   { key: "free_user_skip_limit", label: "Free User Skip Limit", step: 1, min: 0 },
   { key: "free_user_daily_songs", label: "Free User Daily Songs", step: 5, min: 0 },
   { key: "guest_play_limit", label: "Guest Play Limit", step: 1, min: 0 },
+  { key: "free_prompt_ringtone_pct", label: "Free User Ringtone Prompt %  (rest show Contribute)", step: 10, min: 0, max: 100 },
 ];
 
 export default function SettingsManager({ onToast }: { onToast: (m: string) => void }) {
@@ -67,7 +68,7 @@ export default function SettingsManager({ onToast }: { onToast: (m: string) => v
               <Ionicons name="remove" size={16} color={C.text} />
             </Pressable>
             <Text style={styles.stepVal}>{data[n.key]}</Text>
-            <Pressable testID={`inc-${n.key}`} style={styles.stepBtn} onPress={() => setData({ ...data, [n.key]: (data[n.key] || 0) + n.step })}>
+            <Pressable testID={`inc-${n.key}`} style={styles.stepBtn} onPress={() => setData({ ...data, [n.key]: Math.min(n.max ?? Infinity, (data[n.key] || 0) + n.step) })}>
               <Ionicons name="add" size={16} color={C.text} />
             </Pressable>
           </View>

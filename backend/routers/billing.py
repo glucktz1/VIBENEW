@@ -34,6 +34,7 @@ class SubscribeIn(BaseModel):
 async def billing_status():
     cfg = await db.app_config.find_one({"key": "billing"}, {"_id": 0})
     enabled = cfg.get("value", True) if cfg else True
+    settings = await db.settings.find_one({"key": "app"}, {"_id": 0}) or {}
     return {
         "billing_enabled": enabled,
         "guest_play_limit": GUEST_PLAY_LIMIT,
@@ -41,6 +42,7 @@ async def billing_status():
         "skip_tiers": [SKIP_TIER_1, SKIP_TIER_2, SKIP_TIER_3],
         "preview_seconds": PREVIEW_SECONDS,
         "preview_pattern": PREVIEW_PATTERN,
+        "free_prompt_ringtone_pct": int(settings.get("free_prompt_ringtone_pct", 50)),
     }
 
 

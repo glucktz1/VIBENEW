@@ -107,11 +107,10 @@ export default function AlbumDetail() {
           </View>
 
           <View style={styles.list}>
-            {album.songs.map((s: any, i: number) => (
+            {album.songs.map((s: any) => (
               <SongRow
                 key={s.song_id}
-                song={{ ...s, artist_name: album.artist_name, album_title: album.title }}
-                index={i}
+                song={{ ...s, artist_name: album.artist_name, album_title: album.title, thumbnail: s.thumbnail || album.thumbnail }}
                 onPress={() => playOne(s)}
                 onMore={() => setActionSong({ ...s, artist_name: album.artist_name, album_title: album.title, thumbnail: s.thumbnail || album.thumbnail })}
               />

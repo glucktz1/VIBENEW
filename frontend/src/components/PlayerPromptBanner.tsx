@@ -10,14 +10,23 @@ const NEW_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 export function usePlayerPrompt() {
   const { isGuest, isPremium, user } = useAuth() as any;
+  const { current, promptRingtonePct } = usePlayer() as any;
   let isNew = false;
   if (user?.created_at) {
     const t = new Date(user.created_at).getTime();
     if (!isNaN(t)) isNew = Date.now() - t < NEW_WINDOW_MS;
   }
-  const showRingtone = !isGuest && (isPremium || isNew);
-  const showContribute = !isGuest && !isPremium && !isNew;
-  return { showRingtone, showContribute };
+  if (isGuest) return { showRingtone: false, showContribute: false };
+  // Paid or just-joined users always get the ringtone prompt
+  if (isPremium || isNew) return { showRingtone: true, showContribute: false };
+  // FREE users: alternate between ringtone and contribute per admin-set ratio.
+  // Deterministic per song (stable while a song plays, varies across songs).
+  const pct = typeof promptRingtonePct === "number" ? promptRingtonePct : 50;
+  const sid = String(current?.song_id || current?.id || "x");
+  let h = 0;
+  for (let i = 0; i < sid.length; i++) h = (h * 31 + sid.charCodeAt(i)) % 100;
+  const ringtone = h < pct;
+  return { showRingtone: ringtone, showContribute: !ringtone };
 }
 
 export default function PlayerPromptBanner({ variant = "full" }: { variant?: "full" | "mini" }) {

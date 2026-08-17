@@ -29,6 +29,7 @@ type PlayerCtx = {
   currentIndex: number;
   previewMode: boolean;
   freeHoursLeftMin: number | null;
+  promptRingtonePct: number;
   blockReason: BlockReason;
   clearBlock: () => void;
   promptDownloadApp: () => void;
@@ -561,6 +562,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         currentIndex,
         previewMode,
         freeHoursLeftMin,
+        promptRingtonePct: billing?.free_prompt_ringtone_pct ?? 50,
         blockReason,
         clearBlock: () => setBlockReason(null),
         promptDownloadApp,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, GestureResponderEvent } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from "react-native-reanimated";
 import { Image } from "expo-image";
@@ -26,6 +26,7 @@ function fmt(sec: number) {
 
 export default function Player() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { current, isPlaying, isBuffering, position, duration, togglePlay, next, prev, seek, previewMode, gatePremium, promptDownloadApp } = usePlayer();
   const [barWidth, setBarWidth] = useState(1);
   const [liked, setLiked] = useState(false);
@@ -218,7 +219,7 @@ export default function Player() {
         </View>
 
         {/* Controls */}
-        <View style={styles.controls}>
+        <View style={[styles.controls, { paddingBottom: Math.max(insets.bottom, 12) + SPACING.md }]}>
           <Pressable testID="player-prev" onPress={prev} hitSlop={10}>
             <Ionicons name="play-skip-back" size={34} color={COLORS.text} />
           </Pressable>
