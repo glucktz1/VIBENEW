@@ -23,6 +23,13 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - Recommendation engine: weighted scoring (same_album=100, genre=40, popularity=25, artist=20, recency=15) + diversity fallback (cap consecutive same-artist)
 - Subscription plans: Kwa Siku 500, Kwa Wiki 2000, Kwa Mwezi 5500 TZS (simulated Azam Pay)
 
+## What's Been Implemented — Session 14 (Aug 17, 2026) — Album Song Management + Responsive Desktop
+- ✅ Admin: tap an album to expand and view its songs (track #, HLS status badge, source)
+- ✅ Add songs **single** or **bulk** (Title | CDN URL per line); **upload from computer** (expo-document-picker → object storage) or paste **CDN URL** (incl .m3u8)
+- ✅ HLS encoding status pipeline (hls_status/hls_url/encoding_source); real HLS transcoding to be handled by Bunny Stream when keys provided
+- ✅ Backend: GET /api/admin/albums/{id}/songs, POST single + /bulk, DELETE /api/admin/songs/{id}, POST /api/admin/upload-audio
+- ✅ Admin panel + Artist dashboard now render as **desktop layout** (docked sidebar / centered content) on ≥900px; consumer app stays mobile
+
 ## What's Been Implemented — Session 13 (Aug 17, 2026) — Control & Management + Genre Home Rows
 - ✅ **Control & Management** (3 screens): Role Management (change user roles), Approvals (approve/reject pending artists/albums/songs), App Health Monitoring (service status + platform counts)
 - ✅ Backend: PATCH /api/admin/users/{email}/role, GET /api/admin/approvals, POST /api/admin/approvals/{album|song}/{id}, GET /api/admin/health

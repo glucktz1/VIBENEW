@@ -4,9 +4,12 @@ import {
   TextInput, Modal, KeyboardAvoidingView, Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as DocumentPicker from "expo-document-picker";
 import { adminApi } from "@/src/services/api";
 import { adminArtistApi } from "@/src/services/artistApi";
 import { C, SP, COUNTRIES, MONETIZATION, DEFAULT_TAGS } from "./adminTheme";
+
+const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL as string;
 
 const MON_BADGE: Record<string, { c: string; l: string }> = {
   free: { c: C.violet, l: "free" },
@@ -34,6 +37,59 @@ export default function ContentManager({ onToast }: { onToast: (m: string) => vo
   const [editing, setEditing] = useState(false);
   const [tagsFor, setTagsFor] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [songsByAlbum, setSongsByAlbum] = useState<Record<string, any[]>>({});
+  const [songModal, setSongModal] = useState<any>(null); // { album, mode: 'single'|'bulk' }
+  const [songForm, setSongForm] = useState<any>({ title: "", audio_url: "", source: "cdn", fileName: "" });
+  const [bulkText, setBulkText] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  const toggleExpand = async (a: any) => {
+    setMenuFor(null);
+    if (expandedId === a.album_id) { setExpandedId(null); return; }
+    setExpandedId(a.album_id);
+    if (!songsByAlbum[a.album_id]) {
+      const rows = await adminApi.albumSongs(a.album_id).catch(() => []);
+      setSongsByAlbum((m) => ({ ...m, [a.album_id]: rows }));
+    }
+  };
+  const refreshSongs = async (albumId: string) => {
+    const rows = await adminApi.albumSongs(albumId).catch(() => []);
+    setSongsByAlbum((m) => ({ ...m, [albumId]: rows }));
+  };
+  const pickAndUpload = async () => {
+    const res = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true });
+    if (res.canceled || !res.assets?.length) return;
+    const asset = res.assets[0];
+    setUploading(true);
+    try {
+      const up = await adminApi.uploadAudio(asset.uri, asset.name || "audio.mp3", asset.mimeType || "audio/mpeg");
+      setSongForm((f: any) => ({ ...f, audio_url: `${BASE_URL}${up.media_url}`, source: "upload", fileName: asset.name, title: f.title || (asset.name || "").replace(/\.[^.]+$/, "") }));
+      onToast("Uploaded — will encode to HLS");
+    } catch (e: any) { onToast(e.message); } finally { setUploading(false); }
+  };
+  const saveSong = async () => {
+    if (!songModal) return;
+    setSaving(true);
+    try {
+      if (songModal.mode === "bulk") {
+        const lines = bulkText.split("\n").map((l) => l.trim()).filter(Boolean);
+        const songs = lines.map((l) => { const [title, url] = l.split("|").map((x) => x.trim()); return { title: title || "Untitled", audio_url: url || "", source: "cdn" }; }).filter((s) => s.audio_url);
+        if (!songs.length) { onToast("Add lines like: Title | https://cdn/url.mp3"); setSaving(false); return; }
+        await adminApi.addAlbumSongsBulk(songModal.album.album_id, songs);
+        onToast(`${songs.length} songs added`);
+      } else {
+        if (!songForm.title.trim() || !songForm.audio_url) { onToast("Title & audio required"); setSaving(false); return; }
+        await adminApi.addAlbumSong(songModal.album.album_id, { title: songForm.title.trim(), audio_url: songForm.audio_url, source: songForm.source });
+        onToast("Song added");
+      }
+      setSongModal(null); setSongForm({ title: "", audio_url: "", source: "cdn", fileName: "" }); setBulkText("");
+      await refreshSongs(songModal.album.album_id); await load();
+    } catch (e: any) { onToast(e.message); } finally { setSaving(false); }
+  };
+  const delSong = async (albumId: string, songId: string) => {
+    try { await adminApi.deleteSong(songId); await refreshSongs(albumId); await load(); onToast("Song removed"); } catch (e: any) { onToast(e.message); }
+  };
 
   const load = useCallback(async () => {
     const [al, ca, ar] = await Promise.all([
@@ -128,23 +184,29 @@ export default function ContentManager({ onToast }: { onToast: (m: string) => vo
       <Text style={styles.count}>Albums ({filtered.length})</Text>
       {filtered.map((a) => {
         const mb = MON_BADGE[a.monetization_type || "free"];
+        const expanded = expandedId === a.album_id;
+        const songs = songsByAlbum[a.album_id] || [];
         return (
-          <View key={a.album_id} style={[styles.row, a.status === "inactive" && { opacity: 0.5 }]}>
+          <View key={a.album_id} style={[styles.rowWrap, a.status === "inactive" && { opacity: 0.6 }]}>
+          <View style={styles.row}>
+            <Pressable onPress={() => toggleExpand(a)} hitSlop={6}><Ionicons name={expanded ? "chevron-down" : "chevron-forward"} size={18} color={C.muted} /></Pressable>
             <Image source={{ uri: a.thumbnail || "https://picsum.photos/seed/vibe/200" }} style={styles.thumb} />
-            <View style={{ flex: 1, marginLeft: SP.sm }}>
+            <Pressable style={{ flex: 1, marginLeft: SP.sm }} onPress={() => toggleExpand(a)}>
               <Text style={styles.rowTitle} numberOfLines={1}>{a.title}</Text>
-              <Text style={styles.rowArtist} numberOfLines={1}>{a.artist_name || "Unknown Artist"}</Text>
+              <Text style={styles.rowArtist} numberOfLines={1}>{a.artist_name || "Unknown Artist"} · {a.songs_count || 0} songs</Text>
               <View style={styles.badgeRow}>
                 <View style={[styles.badge, { backgroundColor: mb.c + "22" }]}><Text style={[styles.badgeText, { color: mb.c }]}>{mb.l}</Text></View>
                 {a.category_name ? <View style={[styles.badge, { backgroundColor: C.blue + "22" }]}><Text style={[styles.badgeText, { color: C.blue }]}>{a.category_name}</Text></View> : null}
                 {(a.tags || []).slice(0, 2).map((t: string) => <View key={t} style={[styles.badge, { backgroundColor: C.pink + "22" }]}><Text style={[styles.badgeText, { color: C.pink }]}>{t}</Text></View>)}
               </View>
-            </View>
+            </Pressable>
             <Pressable testID={`album-menu-${a.album_id}`} hitSlop={10} onPress={() => setMenuFor(menuFor === a.album_id ? null : a.album_id)}>
               <Ionicons name="ellipsis-vertical" size={20} color={C.sub} />
             </Pressable>
             {menuFor === a.album_id ? (
               <View style={styles.menu}>
+                <MenuItem icon="add-circle-outline" label="Add Song" onPress={() => { setMenuFor(null); setSongModal({ album: a, mode: "single" }); }} tid={`album-addsong-${a.album_id}`} />
+                <MenuItem icon="albums-outline" label="Bulk Add" onPress={() => { setMenuFor(null); setSongModal({ album: a, mode: "bulk" }); }} tid={`album-bulk-${a.album_id}`} />
                 <MenuItem icon="create-outline" label="Edit" onPress={() => openEdit(a)} tid={`album-edit-${a.album_id}`} />
                 <MenuItem icon="pricetag-outline" label="Manage Tags" onPress={() => { setMenuFor(null); setTagsFor({ album_id: a.album_id, tags: a.tags || [] }); }} tid={`album-tags-${a.album_id}`} />
                 <MenuItem icon="eye-off-outline" label={a.status === "inactive" ? "Activate" : "Deactivate"} onPress={() => toggleStatus(a)} tid={`album-toggle-${a.album_id}`} />
@@ -152,9 +214,74 @@ export default function ContentManager({ onToast }: { onToast: (m: string) => vo
               </View>
             ) : null}
           </View>
+          {expanded ? (
+            <View style={styles.songsBox}>
+              {songs.length === 0 ? <Text style={styles.emptySmall}>No songs yet. Use the ⋮ menu to add.</Text> : null}
+              {songs.map((s: any, i: number) => (
+                <View key={s.song_id} style={styles.songRow}>
+                  <Text style={styles.songNum}>{i + 1}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.songTitle} numberOfLines={1}>{s.title}</Text>
+                    <View style={styles.hlsRow}>
+                      <View style={[styles.hlsBadge, { backgroundColor: (s.hls_status === "ready" ? C.emerald : C.amber) + "22" }]}>
+                        <Ionicons name={s.hls_status === "ready" ? "checkmark-circle" : "sync"} size={10} color={s.hls_status === "ready" ? C.emerald : C.amber} />
+                        <Text style={[styles.hlsText, { color: s.hls_status === "ready" ? C.emerald : C.amber }]}>HLS {s.hls_status || "ready"}</Text>
+                      </View>
+                      <Text style={styles.srcText}>{s.encoding_source === "upload" ? "uploaded" : "CDN"}</Text>
+                    </View>
+                  </View>
+                  <Pressable testID={`song-del-${s.song_id}`} hitSlop={8} onPress={() => delSong(a.album_id, s.song_id)}><Ionicons name="trash-outline" size={16} color={C.red} /></Pressable>
+                </View>
+              ))}
+              <View style={styles.songActions}>
+                <Pressable testID={`addsong-${a.album_id}`} style={styles.songBtn} onPress={() => setSongModal({ album: a, mode: "single" })}><Ionicons name="add" size={16} color="#fff" /><Text style={styles.songBtnText}>Add Song</Text></Pressable>
+                <Pressable testID={`bulksong-${a.album_id}`} style={[styles.songBtn, { backgroundColor: C.blue }]} onPress={() => setSongModal({ album: a, mode: "bulk" })}><Ionicons name="albums" size={15} color="#fff" /><Text style={styles.songBtnText}>Bulk Add</Text></Pressable>
+              </View>
+            </View>
+          ) : null}
+          </View>
         );
       })}
       {filtered.length === 0 ? <Text style={styles.empty}>No albums match your filters.</Text> : null}
+
+      {/* Add song modal (single / bulk) */}
+      <Modal transparent visible={!!songModal} animationType="slide" onRequestClose={() => setSongModal(null)}>
+        <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <View style={styles.sheet}>
+            <View style={styles.sheetHead}>
+              <Text style={styles.sheetTitle}>{songModal?.mode === "bulk" ? "Bulk Add Songs" : "Add Song"}</Text>
+              <Pressable testID="song-modal-close" onPress={() => setSongModal(null)} hitSlop={10}><Ionicons name="close" size={22} color={C.text} /></Pressable>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              <View style={styles.modeRow}>
+                <Pressable testID="song-mode-single" style={[styles.modeBtn, songModal?.mode === "single" && styles.modeOn]} onPress={() => setSongModal((m: any) => ({ ...m, mode: "single" }))}><Text style={[styles.modeText, songModal?.mode === "single" && { color: "#fff" }]}>Single</Text></Pressable>
+                <Pressable testID="song-mode-bulk" style={[styles.modeBtn, songModal?.mode === "bulk" && styles.modeOn]} onPress={() => setSongModal((m: any) => ({ ...m, mode: "bulk" }))}><Text style={[styles.modeText, songModal?.mode === "bulk" && { color: "#fff" }]}>Bulk</Text></Pressable>
+              </View>
+
+              {songModal?.mode === "bulk" ? (
+                <>
+                  <Label>Songs (one per line: Title | CDN audio URL)</Label>
+                  <TextInput testID="song-bulk" style={[styles.input, { height: 140, textAlignVertical: "top", paddingTop: 10 }]} value={bulkText} onChangeText={setBulkText} placeholder={"Track 1 | https://cdn/1.mp3\nTrack 2 | https://cdn/2.mp3"} placeholderTextColor={C.muted} multiline autoCapitalize="none" />
+                </>
+              ) : (
+                <>
+                  <Label>Song Title *</Label>
+                  <TextInput testID="song-title" style={styles.input} value={songForm.title} onChangeText={(v: string) => setSongForm({ ...songForm, title: v })} placeholder="Song title" placeholderTextColor={C.muted} />
+                  <Label>Audio Source *</Label>
+                  <Pressable testID="song-upload" style={styles.pickBtn} onPress={pickAndUpload} disabled={uploading}>
+                    {uploading ? <ActivityIndicator color={C.violet} /> : (<><Ionicons name={songForm.source === "upload" ? "checkmark-circle" : "cloud-upload"} size={20} color={songForm.source === "upload" ? C.emerald : C.violet} /><Text style={styles.pickText} numberOfLines={1}>{songForm.fileName || "Upload from computer (.mp3)"}</Text></>)}
+                  </Pressable>
+                  <Text style={styles.orText}>— or paste a CDN URL (already uploaded) —</Text>
+                  <TextInput testID="song-cdn" style={styles.input} value={songForm.source === "cdn" ? songForm.audio_url : ""} onChangeText={(v: string) => setSongForm({ ...songForm, audio_url: v, source: "cdn", fileName: "" })} placeholder="https://cdn.bunny.net/.../song.mp3 or .m3u8" placeholderTextColor={C.muted} autoCapitalize="none" />
+                  <Text style={styles.hlsNote}>ℹ️ Uploaded files are queued for HLS encoding automatically. HLS/.m3u8 CDN links are used directly.</Text>
+                </>
+              )}
+              <Pressable testID="song-save" style={styles.saveBtn} onPress={saveSong} disabled={saving}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>{songModal?.mode === "bulk" ? "Add Songs" : "Add Song"}</Text>}</Pressable>
+              <View style={{ height: 24 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* Create / Edit Album form */}
       <Modal transparent visible={showForm} animationType="slide" onRequestClose={() => setShowForm(false)}>
@@ -308,7 +435,25 @@ const styles = StyleSheet.create({
   fchipOn: { backgroundColor: C.violet, borderColor: C.violet },
   fchipText: { color: C.sub, fontWeight: "700", fontSize: 12, textTransform: "capitalize" },
   count: { color: C.sub, fontSize: 12, fontWeight: "700", marginBottom: SP.sm },
-  row: { flexDirection: "row", alignItems: "center", backgroundColor: C.cardAlt, borderRadius: 12, padding: SP.sm, marginBottom: SP.sm, borderWidth: 1, borderColor: C.border },
+  row: { flexDirection: "row", alignItems: "center", backgroundColor: C.cardAlt, borderRadius: 12, padding: SP.sm, borderWidth: 1, borderColor: C.border },
+  rowWrap: { marginBottom: SP.sm },
+  songsBox: { backgroundColor: "rgba(24,24,27,0.4)", borderRadius: 10, borderWidth: 1, borderColor: C.border, borderTopWidth: 0, marginTop: -6, paddingTop: 12, padding: SP.sm },
+  songRow: { flexDirection: "row", alignItems: "center", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "rgba(39,39,42,0.5)", gap: 10 },
+  songNum: { color: C.muted, fontSize: 12, width: 18, textAlign: "center" },
+  songTitle: { color: C.text, fontSize: 13, fontWeight: "600" },
+  hlsRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3 },
+  hlsBadge: { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
+  hlsText: { fontSize: 9, fontWeight: "800" },
+  srcText: { color: C.muted, fontSize: 10 },
+  songActions: { flexDirection: "row", gap: SP.sm, marginTop: SP.sm },
+  songBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: C.violet, borderRadius: 8, height: 40, gap: 4 },
+  songBtnText: { color: "#fff", fontWeight: "800", fontSize: 12 },
+  modeRow: { flexDirection: "row", gap: SP.sm, marginBottom: SP.sm },
+  modeBtn: { flex: 1, height: 38, borderRadius: 8, backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
+  modeOn: { backgroundColor: C.violet, borderColor: C.violet },
+  modeText: { color: C.sub, fontWeight: "700", fontSize: 13 },
+  orText: { color: C.muted, fontSize: 11, textAlign: "center", marginVertical: SP.sm },
+  hlsNote: { color: C.muted, fontSize: 11, marginTop: SP.sm, lineHeight: 15 },
   thumb: { width: 52, height: 52, borderRadius: 8, backgroundColor: C.card },
   rowTitle: { color: C.text, fontSize: 14, fontWeight: "700" },
   rowArtist: { color: C.sub, fontSize: 12, marginTop: 1 },

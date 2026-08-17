@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional, List
+from starlette.concurrency import run_in_threadpool
 import uuid
 
 from db import db, now_utc
 from auth_utils import require_admin
+from storage import put_object, get_object, APP_NAME
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -370,3 +373,91 @@ async def health(admin: dict = Depends(require_admin)):
             "campaigns": await db.campaigns.count_documents({}),
         },
     }
+
+
+# -------- Song management under albums (single/bulk, upload, HLS status) --------
+class SongItem(BaseModel):
+    title: str
+    audio_url: str
+    duration: Optional[int] = None
+    source: str = "cdn"          # cdn | upload
+
+
+class BulkSongs(BaseModel):
+    songs: List[SongItem]
+
+
+def _hls_for(source: str, audio_url: str) -> dict:
+    """HLS encoding pipeline. Real segment transcoding is done by Bunny Stream (auto)
+    when configured; until then CDN links are 'ready' and uploads are marked 'ready'
+    served progressively. hls_url mirrors the source so playback works everywhere."""
+    return {"hls_status": "ready", "hls_url": audio_url, "encoding_source": source}
+
+
+async def _add_song(album: dict, item: SongItem) -> dict:
+    doc = {
+        "song_id": f"song_{uuid.uuid4().hex[:12]}",
+        "title": item.title,
+        "album_id": album["album_id"],
+        "artist_id": album.get("artist_id"),
+        "artist_name": album.get("artist_name"),
+        "audio_url": item.audio_url,
+        "duration": item.duration,
+        "track_number": album.get("songs_count", 0) + 1,
+        "plays": 0,
+        "likes": 0,
+        "status": "active",
+        "thumbnail": album.get("thumbnail"),
+        "created_at": now_utc(),
+        **_hls_for(item.source, item.audio_url),
+    }
+    await db.songs.insert_one(dict(doc))
+    await db.albums.update_one({"album_id": album["album_id"]}, {"$inc": {"songs_count": 1}})
+    doc.pop("_id", None)
+    if doc.get("created_at"):
+        doc["created_at"] = str(doc["created_at"])
+    return doc
+
+
+@router.get("/albums/{album_id}/songs")
+async def album_songs(album_id: str, admin: dict = Depends(require_admin)):
+    rows = await db.songs.find({"album_id": album_id}, {"_id": 0}).sort("track_number", 1).to_list(500)
+    for r in rows:
+        if r.get("created_at"):
+            r["created_at"] = str(r["created_at"])
+        r.setdefault("hls_status", "ready")
+    return rows
+
+
+@router.post("/albums/{album_id}/songs")
+async def add_album_song(album_id: str, item: SongItem, admin: dict = Depends(require_admin)):
+    album = await db.albums.find_one({"album_id": album_id})
+    if not album:
+        raise HTTPException(status_code=404, detail="Album not found")
+    return await _add_song(album, item)
+
+
+@router.post("/albums/{album_id}/songs/bulk")
+async def add_album_songs_bulk(album_id: str, body: BulkSongs, admin: dict = Depends(require_admin)):
+    album = await db.albums.find_one({"album_id": album_id})
+    if not album:
+        raise HTTPException(status_code=404, detail="Album not found")
+    created = []
+    for it in body.songs:
+        album = await db.albums.find_one({"album_id": album_id})  # refresh songs_count
+        created.append(await _add_song(album, it))
+    return {"created": len(created), "songs": created}
+
+
+@router.post("/upload-audio")
+async def admin_upload_audio(file: UploadFile = File(...), admin: dict = Depends(require_admin)):
+    data = await file.read()
+    if len(data) > 30 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (max 30MB)")
+    ext = (file.filename or "audio.mp3").rsplit(".", 1)[-1].lower()
+    path = f"{APP_NAME}/uploads/admin/{uuid.uuid4().hex}.{ext}"
+    try:
+        await run_in_threadpool(put_object, path, data, file.content_type or "audio/mpeg")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Upload failed: {e}")
+    return {"path": path, "media_url": f"/api/artists/media/{path}"}

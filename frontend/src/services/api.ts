@@ -1,4 +1,5 @@
 import { storage } from "@/src/utils/storage";
+import { Platform } from "react-native";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL as string;
 export const TOKEN_KEY = "vibe_access_token";
@@ -93,7 +94,9 @@ export const adminApi = {
   updateAlbum: (id: string, b: any) => api.put<any>(`/admin/albums/${id}`, b),
   albumStatus: (id: string, status: string) => api.patch<any>(`/admin/albums/${id}/status`, { status }),
   deleteAlbum: (id: string) => api.del(`/admin/albums/${id}`),
-  createSong: (b: any) => api.post<any>("/admin/songs", b),
+  albumSongs: (id: string) => api.get<any[]>(`/admin/albums/${id}/songs`),
+  addAlbumSong: (id: string, b: any) => api.post<any>(`/admin/albums/${id}/songs`, b),
+  addAlbumSongsBulk: (id: string, songs: any[]) => api.post<any>(`/admin/albums/${id}/songs/bulk`, { songs }),
   deleteSong: (id: string) => api.del(`/admin/songs/${id}`),
   categories: () => api.get<any[]>("/admin/categories"),
   createCategory: (b: any) => api.post<any>("/admin/categories", b),
@@ -110,6 +113,26 @@ export const adminApi = {
   revenueOverview: () => api.get<any>("/analytics/revenue-overview"),
   transactions: (status = "all", q = "") => api.get<any>(`/analytics/transactions?status=${status}&q=${encodeURIComponent(q)}`),
   locationOverview: () => api.get<any>("/analytics/location-overview"),
+  uploadAudio: async (uri: string, name: string, type: string): Promise<{ path: string; media_url: string }> => {
+    const token = await storage.secureGet<string>(TOKEN_KEY, "");
+    const form = new FormData();
+    if (Platform.OS === "web") {
+      const blob = await (await fetch(uri)).blob();
+      form.append("file", blob, name);
+    } else {
+      form.append("file", { uri, name, type } as any);
+    }
+    const res = await fetch(`${BASE}/api/admin/upload-audio`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: form,
+    });
+    const text = await res.text();
+    let data: any = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    if (!res.ok) throw new Error((data && data.detail) || `Upload failed (${res.status})`);
+    return data;
+  },
   dataUsage: (days = 30) => api.get<any>(`/analytics/data-usage?days=${days}`),
   breakdown: () => api.get<any>("/analytics/breakdown"),
   settings: () => api.get<any>("/admin/settings"),
