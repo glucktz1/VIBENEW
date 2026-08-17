@@ -12,6 +12,9 @@ import { adminApi } from "@/src/services/api";
 import { adminArtistApi } from "@/src/services/artistApi";
 import ContentManager from "@/src/components/admin/ContentManager";
 import CategoriesManager from "@/src/components/admin/CategoriesManager";
+import SettingsManager from "@/src/components/admin/SettingsManager";
+import AdvertisingManager from "@/src/components/admin/AdvertisingManager";
+import RecommendationManager from "@/src/components/admin/RecommendationManager";
 import { useAuth } from "@/src/context/AuthContext";
 
 // Gracefy admin palette (zinc / violet) — faithful to the original web dashboard
@@ -62,19 +65,19 @@ const NAV: any[] = [
     { label: "App Health Monitoring", icon: "phone-portrait" },
   ]},
   { type: "group", key: "settings", label: "Settings", icon: "settings", items: [
-    { label: "System Settings", icon: "globe" },
-    { label: "App Settings", icon: "settings-outline" },
-    { label: "Branding", icon: "color-palette" },
-    { label: "Legal & Compliance", icon: "document-text" },
-    { label: "Monetization", icon: "card" },
-    { label: "Auth Settings", icon: "lock-closed" },
-    { label: "Security", icon: "lock-closed-outline" },
+    { label: "System Settings", icon: "globe", tab: "settings" },
+    { label: "App Settings", icon: "settings-outline", tab: "settings" },
+    { label: "Branding", icon: "color-palette", tab: "settings" },
+    { label: "Legal & Compliance", icon: "document-text", tab: "settings" },
+    { label: "Monetization", icon: "card", tab: "settings" },
+    { label: "Auth Settings", icon: "lock-closed", tab: "settings" },
+    { label: "Security", icon: "lock-closed-outline", tab: "settings" },
   ]},
-  { type: "item", label: "Advertising & Campaigns", icon: "megaphone" },
+  { type: "item", label: "Advertising & Campaigns", icon: "megaphone", tab: "advertising" },
   { type: "item", label: "Feedback Manager", icon: "chatbubble-ellipses" },
   { type: "item", label: "Chat & Support", icon: "headset" },
   { type: "item", label: "Knowledge Bank", icon: "bulb" },
-  { type: "item", label: "Recommendations", icon: "sparkles" },
+  { type: "item", label: "Recommendations", icon: "sparkles", tab: "recommendations" },
   { type: "item", label: "Geo Content", icon: "globe" },
   { type: "group", key: "choir", label: "Artists & Singers", icon: "people-circle", items: [
     { label: "Artists", icon: "mic", tab: "artists" },
@@ -106,6 +109,9 @@ const TAB_TITLES: Record<string, string> = {
   withdrawals: "Withdrawals",
   content: "Albums & Songs",
   categories: "Categories",
+  settings: "Settings",
+  advertising: "Advertising & Campaigns",
+  recommendations: "Recommendation Engine",
 };
 
 export default function AdminDashboard() {
@@ -113,7 +119,7 @@ export default function AdminDashboard() {
   const { isAdmin, isGuest, loading: authLoading, user, logout } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"overview" | "content" | "users" | "artists" | "withdrawals" | "analytics" | "revenue" | "transactions" | "location" | "categories">("overview");
+  const [tab, setTab] = useState<"overview" | "content" | "users" | "artists" | "withdrawals" | "analytics" | "revenue" | "transactions" | "location" | "categories" | "settings" | "advertising" | "recommendations">("overview");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ reports: true });
   const [toast, setToast] = useState("");
@@ -273,6 +279,12 @@ export default function AdminDashboard() {
           {tab === "content" ? <ContentManager onToast={flash} /> : null}
 
           {tab === "categories" ? <CategoriesManager onToast={flash} /> : null}
+
+          {tab === "settings" ? <SettingsManager onToast={flash} /> : null}
+
+          {tab === "advertising" ? <AdvertisingManager onToast={flash} /> : null}
+
+          {tab === "recommendations" ? <RecommendationManager onToast={flash} /> : null}
 
           {tab === "users" ? (
             <>

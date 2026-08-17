@@ -139,3 +139,14 @@
 - admin content tab now uses ContentManager; new categories tab uses CategoriesManager
 - Analytics tab: sub-tabs Overview | Data Usage; highlight cards (Paid Plays/Free Listens/Conversion); count cards (Albums/Songs/Artists/Users); Data Usage charts
 - Rebrand: sidebar Podcasts/Books/Categories, Churches→Production Houses, Religious Leaders→Aggregators; consumer: bible tab→"Vitabu", home quick links → Podcasts/Vitabu/Studio, /podcasts screen added, Neno la Leo removed
+
+## Session 12 (Aug 17, 2026) — Settings + Advertising + Recommendation Engine
+### Backend (routers/settings.py)
+- GET/PUT /api/admin/settings (persisted app config: toggles + limits)
+- GET/POST/PATCH/DELETE /api/admin/campaigns (+ summary)
+- GET/PUT /api/admin/recommendations (engine config)
+- analytics.py: GET /api/analytics/breakdown (users/content/devices/replays)
+### Frontend
+- New admin components: SettingsManager, AdvertisingManager, RecommendationManager (zinc theme, self-fetch, save bars w/ unsaved-changes)
+- Wired sidebar: Settings group items → settings tab; Advertising & Campaigns → advertising tab; Recommendations → recommendations tab
+- admin@vibe.app / Vibe@2026

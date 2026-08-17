@@ -448,3 +448,47 @@ async def data_usage(days: int = 30, admin: dict = Depends(require_admin)):
         "minutes_per_day": minutes_per_day,
     }
 
+
+@router.get("/breakdown")
+async def breakdown(admin: dict = Depends(require_admin)):
+    now = datetime.now(timezone.utc)
+    total_users = await db.users.count_documents({})
+    premium = await db.users.count_documents({"is_premium": True})
+    free = total_users - premium
+
+    # user growth last 6 months
+    growth = []
+    for i in range(5, -1, -1):
+        start, end, label = _month_bounds(now, i)
+        new = await db.users.count_documents({"created_at": {"$gte": start, "$lt": end}})
+        growth.append({"month": label, "new": new})
+
+    # content — top albums + songs count by album
+    top_albums = await db.albums.find({}, {"_id": 0, "title": 1, "total_plays": 1}).sort("total_plays", -1).limit(6).to_list(6)
+    total_songs = await db.songs.count_documents({})
+    total_albums = await db.albums.count_documents({})
+
+    # devices — from users device_type (best-effort)
+    users = await db.users.find({}, {"_id": 0, "device_type": 1}).to_list(10000)
+    dev: dict = {}
+    for u in users:
+        d = (u.get("device_type") or "Unknown").upper()
+        dev[d] = dev.get(d, 0) + 1
+
+    # replays — top replayed songs (by plays)
+    top_replays = await db.songs.find({}, {"_id": 0, "title": 1, "plays": 1}).sort("plays", -1).limit(6).to_list(6)
+
+    return {
+        "users": {
+            "total": total_users, "premium": premium, "free": free,
+            "premium_pct": round((premium / total_users) * 100) if total_users else 0,
+            "growth": growth,
+        },
+        "content": {
+            "total_songs": total_songs, "total_albums": total_albums,
+            "top_albums": [{"title": a.get("title"), "plays": a.get("total_plays", 0)} for a in top_albums],
+        },
+        "devices": {"data": [{"name": k, "value": v} for k, v in dev.items()]},
+        "replays": {"top": [{"title": s.get("title"), "plays": s.get("plays", 0)} for s in top_replays]},
+    }
+

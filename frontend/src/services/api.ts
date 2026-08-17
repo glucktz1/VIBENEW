@@ -111,4 +111,13 @@ export const adminApi = {
   transactions: (status = "all", q = "") => api.get<any>(`/analytics/transactions?status=${status}&q=${encodeURIComponent(q)}`),
   locationOverview: () => api.get<any>("/analytics/location-overview"),
   dataUsage: (days = 30) => api.get<any>(`/analytics/data-usage?days=${days}`),
+  breakdown: () => api.get<any>("/analytics/breakdown"),
+  settings: () => api.get<any>("/admin/settings"),
+  updateSettings: (b: any) => api.put<any>("/admin/settings", b),
+  campaigns: () => api.get<any>("/admin/campaigns"),
+  createCampaign: (b: any) => api.post<any>("/admin/campaigns", b),
+  updateCampaign: (id: string, b: any) => api.patch<any>(`/admin/campaigns/${id}`, b),
+  deleteCampaign: (id: string) => api.del(`/admin/campaigns/${id}`),
+  recommendations: () => api.get<any>("/admin/recommendations"),
+  updateRecommendations: (b: any) => api.put<any>("/admin/recommendations", b),
 };
