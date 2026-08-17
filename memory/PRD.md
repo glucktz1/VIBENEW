@@ -240,3 +240,11 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - admin/index Overview sub-tab: amber "free minutes consumed (excluded from revenue)" banner via adminApi.freeMinutes
 - Verified desktop: columns/filters/export/bulk bar/delete-confirm render; bulk activate/deactivate API ok
 ### NOTE / flag: precise IP->city geolocation needs a geo provider (ipinfo/MaxMind API key); currently region comes from client-provided/backfilled values. GPS capture needs location-permission flow in the consumer register screen (not yet built).
+
+## Session 16i — Player prompt banners on mini player + ringtone prompt for paid/new users
+- NEW src/components/PlayerPromptBanner.tsx (variant full|mini): free logged-in users -> "Changia kidogo kusikiliza kwa uhuru" (->/plans); premium OR just-joined (<48h) users -> "Weka Wimbo huu muito wa simu yangu" (set-as-ringtone); guests -> none
+- MiniPlayer: restructured (outer View + inner navigating Pressable row) and added the thin banner strip above the row (matches attached image)
+- player.tsx: replaced the contribute-only banner with <PlayerPromptBanner variant="full"/> (now premium/new users see ringtone prompt too)
+- auth_utils.public_user now returns created_at (used for "just joined" detection)
+- Ringtone tap shows Alert (Android/iOS) noting it applies on the installed native build (real ringtone assignment needs WRITE_SETTINGS/native build — not testable in Expo Go/web)
+- Verified: registered a new user, played a song -> mini player shows "Weka Wimbo huu muito wa simu yangu" (MINI_RINGTONE True); guests show no banner

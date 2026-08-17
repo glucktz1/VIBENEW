@@ -50,6 +50,7 @@ def public_user(doc: dict) -> dict:
         "role": doc.get("role", "customer"),
         "is_premium": doc.get("is_premium", False),
         "subscription": doc.get("subscription"),
+        "created_at": str(doc.get("created_at")) if doc.get("created_at") else None,
         "picture": doc.get("picture"),
         "liked_songs": doc.get("liked_songs", []),
     }

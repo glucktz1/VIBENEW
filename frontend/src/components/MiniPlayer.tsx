@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { usePlayer } from "@/src/context/PlayerContext";
 import AnimatedEqualizer from "@/src/components/AnimatedEqualizer";
+import PlayerPromptBanner from "@/src/components/PlayerPromptBanner";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 
 export default function MiniPlayer({ bottomOffset = 0 }: { bottomOffset?: number }) {
@@ -15,15 +16,12 @@ export default function MiniPlayer({ bottomOffset = 0 }: { bottomOffset?: number
   const progress = !current.isLive && duration > 0 && isFinite(duration) ? Math.min(1, position / duration) : 0;
 
   return (
-    <Pressable
-      testID="mini-player"
-      onPress={() => router.push("/player")}
-      style={[styles.wrap, { bottom: bottomOffset }]}
-    >
+    <View testID="mini-player" style={[styles.wrap, { bottom: bottomOffset }]}>
+      <PlayerPromptBanner variant="mini" />
       <View style={[styles.progressTrack]}>
         <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
       </View>
-      <View style={styles.row}>
+      <Pressable testID="mini-open" onPress={() => router.push("/player")} style={styles.row}>
         <View>
           <Image source={{ uri: current.thumbnail }} style={styles.art} contentFit="cover" transition={200} />
           {isPlaying ? (
@@ -53,8 +51,8 @@ export default function MiniPlayer({ bottomOffset = 0 }: { bottomOffset?: number
         <Pressable testID="mini-next" onPress={() => next()} hitSlop={10} style={styles.btn}>
           <Ionicons name="play-skip-forward" size={20} color={COLORS.text} />
         </Pressable>
-      </View>
-    </Pressable>
+      </Pressable>
+    </View>
   );
 }
 

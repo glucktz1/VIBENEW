@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, GestureResponderEvent, Platform } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, GestureResponderEvent } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from "react-native-reanimated";
@@ -8,10 +8,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { usePlayer } from "@/src/context/PlayerContext";
-import { useAuth } from "@/src/context/AuthContext";
 import { libraryApi } from "@/src/services/api";
 import { isDownloaded, downloadTrack, removeDownload, isWeb } from "@/src/services/downloads";
 import AddToPlaylistSheet from "@/src/components/AddToPlaylistSheet";
+import PlayerPromptBanner from "@/src/components/PlayerPromptBanner";
 import QueueSheet from "@/src/components/QueueSheet";
 import ShareCardModal from "@/src/components/ShareCardModal";
 import AnimatedEqualizer from "@/src/components/AnimatedEqualizer";
@@ -27,7 +27,6 @@ function fmt(sec: number) {
 export default function Player() {
   const router = useRouter();
   const { current, isPlaying, isBuffering, position, duration, togglePlay, next, prev, seek, previewMode, gatePremium, promptDownloadApp } = usePlayer();
-  const { isGuest, isPremium } = useAuth();
   const [barWidth, setBarWidth] = useState(1);
   const [liked, setLiked] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
@@ -94,8 +93,6 @@ export default function Player() {
     } catch {}
     setDownloading(false);
   };
-
-  const showChangiaBanner = !isGuest && !isPremium;
 
   const onShare = async () => {
     setShowShare(true);
@@ -189,14 +186,8 @@ export default function Player() {
           ) : null}
         </View>
 
-        {/* Non-premium payment prompt banner (faithful to Gracefy) */}
-        {showChangiaBanner ? (
-          <Pressable testID="changia-banner" style={styles.changiaBanner} onPress={() => router.push("/plans")}>
-            <Ionicons name="star" size={16} color="#fff" />
-            <Text style={styles.changiaText} numberOfLines={1}>Changia kidogo kusikiliza kwa uhuru</Text>
-            <View style={styles.changiaBtn}><Text style={styles.changiaBtnText}>Changia</Text></View>
-          </Pressable>
-        ) : null}
+        {/* Non-premium payment prompt OR ringtone prompt (paid / new users) */}
+        <PlayerPromptBanner variant="full" />
 
         {/* Progress */}
         <View style={styles.progressWrap}>
