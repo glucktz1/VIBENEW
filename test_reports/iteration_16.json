@@ -1,0 +1,30 @@
+{
+  "summary": "Session 12 — 'Home Layout Manager' feature verified end-to-end (backend + frontend). Backend: 7/7 pytest passed in /app/backend/tests/test_home_layout.py — (a) GET /api/home returns sections including 'recommended' (type 'recommended', title 'Made for You'), 'pick_week' (type 'pick_week', title 'Pick of the Week') and 'recently_added' (type 'albums', title 'Recently Added'); (b) GET /api/admin/home-layout is auth-gated (returns 401/403 without token) and returns {rows:[{id,title,enabled}]} with admin token; (c) PUT /api/admin/home-layout with a custom rows array persists — GET /api/home then reflects the config: disabled rows ('trending','new') are OMITTED and enabled rows are ordered exactly as saved (pick_week → recommended → recently_added). Cleanup test resets home_layout to all-enabled default (canonical order), so demo home is not left with hidden rows. Frontend (mobile 390x844 web preview): (1) Consumer '/' home renders all 3 new rows visibly — 'Made for You' with 8 home-rec-<song_id> cards, 'Pick of the Week' with 5 home-pick-<album_id> cards, 'Recently Added' as album cards. Tapping home-pick-alb_a4afca836a0b routes to /album/alb_a4afca836a0b as required. (2) Admin gate flow works: /admin shows 'Ingia kama Admin' → tapping goes to (auth)/login, filling testIDs login-email/login-password + login-submit logs in, navigating back to /admin loads the dashboard. (3) Sidebar 'Control & Management' group (nav-group-control) expands and its 'Layout Management' leaf (nav-layout-management) opens the NEW LayoutManager component — NOT a 'coming soon' toast. Screen renders 'Layout Management' title + 'Reorder and show/hide the rows on the app home screen.' subtitle, all 6 rows with testIDs layout-toggle-{id}, layout-up-{id}, layout-down-{id}, plus layout-save button. Tapping Save fires PUT /api/admin/home-layout and shows toast 'Home layout saved'. No red screen, no crash. Console only warns 'props.pointerEvents is deprecated' (RN Web internal). 401 console noise is expected pre-auth admin API probes.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_home_layout.py",
+    "/app/test_reports/pytest/home_layout.xml",
+    "/app/test_reports/iteration_16.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "/app/frontend/app/admin/index.tsx is still 1105+ lines (already flagged in iter_13/14/15). Extract per-tab renderers to keep under the 700-line soft limit. Non-blocking.",
+    "/app/backend/routers/home.py duplicates album+song enrichment logic between the default (`new`), category rails and the new (`recently_added`) sections — songs_count is re-computed in three places. Consider a helper `enrich_albums(albums)` to DRY it up.",
+    "/app/frontend/src/components/admin/LayoutManager.tsx: the up/down chevron color uses `C.border` for the disabled state (first row up / last row down) which is nearly invisible against C.cardAlt on the mobile theme. Consider `C.muted` instead so it reads as 'disabled' rather than 'hidden'. Not a bug."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_home_layout.py (created)"
+  ],
+  "success_rate": {"backend": "100% (7/7 pytest)", "frontend": "100% — consumer 3 rows + admin Layout Manager verified"},
+  "seed_data_creation": "None. The mutation test PUT a custom home_layout config, then the cleanup test reset it to all-enabled canonical order. Verified via a follow-up GET /api/home that trending/new are visible again. Frontend Save press also re-saved an all-enabled layout. Demo home is NOT left with hidden rows.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Home layout contract: db.app_config { key:'home_layout', value:[{id,title,enabled}] }. Backend HOME_ROWS canonical list (in /app/backend/routers/admin.py) = ['recommended','pick_week','recently_added','artists','trending','new']. /api/home filters+sorts sections by this config; sections not listed in the config keep their original position (via order_map default 999). Admin Layout Manager testIDs: layout-save, layout-toggle-<id>, layout-up-<id>, layout-down-<id>. Sidebar nav testID for the leaf is 'nav-layout-management' (slug of 'Layout Management') inside the collapsed 'nav-group-control' accordion. Consumer home testIDs for new rows: home-rec-<song_id> (Made for You cards, tapping plays song), home-pick-<album_id> (Pick of the Week cards, tapping navigates to /album/<id>). 'Recently Added' rail reuses the existing AlbumCard component (no dedicated testID prefix — routes through AlbumCard press).",
+  "rca_of_issue": "N/A — feature works. Prior 'coming soon' behavior for Layout Management is resolved: LayoutManager.tsx is imported and mounted for tab==='layout' in /app/frontend/app/admin/index.tsx (line 380), and the sidebar entry now has { tab:'layout' } (line 65) so onNavPress switches to it instead of flashing the fallback toast."
+}

@@ -274,3 +274,11 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 
 ## Session 16l — Single-user enroll auto-detects user (no CSV/phone paste)
 - EnrollModal now takes optional `single={name,mobile}`; UserDetail passes it. In single mode: title "Enroll User", Targets shows auto-detected user chip ("<name> · <mobile>|no mobile on file"), CSV button + phones textarea hidden, submit ignores phones (targets the userId). Bulk enroll (Customers list) keeps CSV/phone paste. Verified in desktop.
+
+## Session 16m — Home curated rows (Made for You/Pick of Week/Recently Added) + working Layout Manager
+- home.py: new sections recommended(type recommended, top songs), pick_week(type pick_week, top albums), recently_added(type albums, newest). Home now filters+orders sections by db.app_config key "home_layout".
+- admin.py: GET/PUT /admin/home-layout (HOME_ROWS default all enabled)
+- api.ts: adminApi.homeLayout/setHomeLayout
+- NEW LayoutManager.tsx: list rows with up/down reorder + enable/disable Switch + Save; wired to "Layout Management" sidebar (tab:"layout")
+- (tabs)/index.tsx: renders type "recommended" (rounded row cards + play), "pick_week" (wide dark cover card + play), recently_added uses AlbumCard
+- Verified backend: layout save reorders/hides home sections (pick_week first, trending hidden). Reset to default after test.

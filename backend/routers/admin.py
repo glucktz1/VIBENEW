@@ -965,3 +965,29 @@ async def admin_upload_audio(file: UploadFile = File(...), admin: dict = Depends
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Upload failed: {e}")
     return {"path": path, "media_url": f"/api/artists/media/{path}"}
+
+
+HOME_ROWS = [
+    {"id": "recommended", "title": "Made for You"},
+    {"id": "pick_week", "title": "Pick of the Week"},
+    {"id": "recently_added", "title": "Recently Added"},
+    {"id": "artists", "title": "Wasanii Maarufu"},
+    {"id": "trending", "title": "Trending Now"},
+    {"id": "new", "title": "New Releases"},
+]
+
+
+@router.get("/home-layout")
+async def get_home_layout(admin: dict = Depends(require_admin)):
+    cfg = await db.app_config.find_one({"key": "home_layout"}, {"_id": 0})
+    rows = (cfg or {}).get("value")
+    if not rows:
+        rows = [{**r, "enabled": True} for r in HOME_ROWS]
+    return {"rows": rows}
+
+
+@router.put("/home-layout")
+async def set_home_layout(body: dict, admin: dict = Depends(require_admin)):
+    rows = body.get("rows") or []
+    await db.app_config.update_one({"key": "home_layout"}, {"$set": {"key": "home_layout", "value": rows}}, upsert=True)
+    return {"ok": True, "rows": rows}

@@ -133,6 +133,42 @@ export default function Home() {
                     </Pressable>
                   )}
                 />
+              ) : section.type === "recommended" ? (
+                <FlatList
+                  data={section.items}
+                  keyExtractor={(s) => s.song_id}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingRight: SPACING.md }}
+                  renderItem={({ item }) => (
+                    <Pressable testID={`home-rec-${item.song_id}`} style={styles.recCard} onPress={() => playSong(item, section.items)}>
+                      <Image source={{ uri: item.thumbnail }} style={styles.recArt} contentFit="cover" transition={200} />
+                      <View style={{ flex: 1, marginLeft: SPACING.sm }}>
+                        <Text style={styles.songTitle} numberOfLines={1}>{item.title}</Text>
+                        <Text style={styles.songArtist} numberOfLines={1}>{item.artist_name || "Vibe"}</Text>
+                      </View>
+                      <View style={styles.recPlay}><Ionicons name="play" size={16} color="#fff" /></View>
+                    </Pressable>
+                  )}
+                />
+              ) : section.type === "pick_week" ? (
+                <FlatList
+                  data={section.items}
+                  keyExtractor={(a) => a.album_id}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingRight: SPACING.md }}
+                  renderItem={({ item }) => (
+                    <Pressable testID={`home-pick-${item.album_id}`} style={styles.pickCard} onPress={() => router.push(`/album/${item.album_id}`)}>
+                      <Image source={{ uri: item.thumbnail }} style={styles.pickArt} contentFit="cover" transition={200} />
+                      <View style={styles.pickOverlay}>
+                        <Text style={styles.pickTitle} numberOfLines={1}>{item.title}</Text>
+                        <Text style={styles.pickSub} numberOfLines={1}>{item.artist_name || "Vibe"} · {item.songs_count || 0} nyimbo</Text>
+                      </View>
+                      <View style={styles.pickPlay}><Ionicons name="play" size={22} color="#fff" /></View>
+                    </Pressable>
+                  )}
+                />
               ) : (
                 <FlatList
                   data={section.items}
@@ -187,7 +223,16 @@ const styles = StyleSheet.create({
   artistCard: { width: 110, marginRight: SPACING.md, alignItems: "center" },
   artistArt: { width: 100, height: 100, borderRadius: 50, backgroundColor: COLORS.surface },
   artistFallback: { alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primary },
-  artistName: { color: COLORS.text, fontSize: FONT.md, fontWeight: "700", marginTop: SPACING.sm, textAlign: "center" },  sectionTitle: { color: COLORS.text, fontSize: FONT.xl, fontWeight: "800", marginBottom: SPACING.md },
+  artistName: { color: COLORS.text, fontSize: FONT.md, fontWeight: "700", marginTop: SPACING.sm, textAlign: "center" },
+  recCard: { flexDirection: "row", alignItems: "center", width: 260, marginRight: SPACING.md, backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: SPACING.sm },
+  recArt: { width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.background },
+  recPlay: { width: 34, height: 34, borderRadius: 17, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center" },
+  pickCard: { width: 300, height: 150, marginRight: SPACING.md, borderRadius: RADIUS.xl, overflow: "hidden", backgroundColor: COLORS.surface },
+  pickArt: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
+  pickOverlay: { position: "absolute", left: 0, right: 0, bottom: 0, padding: SPACING.md, backgroundColor: "rgba(0,0,0,0.45)" },
+  pickTitle: { color: "#fff", fontSize: FONT.lg, fontWeight: "800" },
+  pickSub: { color: "rgba(255,255,255,0.85)", fontSize: FONT.sm, marginTop: 2 },
+  pickPlay: { position: "absolute", top: SPACING.md, right: SPACING.md, width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center" },  sectionTitle: { color: COLORS.text, fontSize: FONT.xl, fontWeight: "800", marginBottom: SPACING.md },
   songCard: { width: 140, marginRight: SPACING.md },
   songArt: { width: 140, height: 140, borderRadius: RADIUS.lg, backgroundColor: COLORS.surface },
   songPlay: {

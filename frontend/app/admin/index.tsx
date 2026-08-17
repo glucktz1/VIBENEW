@@ -13,6 +13,7 @@ import { adminArtistApi } from "@/src/services/artistApi";
 import ContentManager from "@/src/components/admin/ContentManager";
 import CategoriesManager from "@/src/components/admin/CategoriesManager";
 import UsersManager from "@/src/components/admin/UsersManager";
+import LayoutManager from "@/src/components/admin/LayoutManager";
 import SettingsManager from "@/src/components/admin/SettingsManager";
 import AdvertisingManager from "@/src/components/admin/AdvertisingManager";
 import RecommendationManager from "@/src/components/admin/RecommendationManager";
@@ -61,7 +62,7 @@ const NAV: any[] = [
   { type: "group", key: "control", label: "Control & Management", icon: "shield", items: [
     { label: "Role Management", icon: "shield-half", tab: "control", sub: "roles" },
     { label: "Approvals", icon: "checkmark-circle", tab: "control", sub: "approvals" },
-    { label: "Layout Management", icon: "grid-outline" },
+    { label: "Layout Management", icon: "grid-outline", tab: "layout" },
     { label: "CDN Management", icon: "cloud" },
     { label: "HLS Streaming", icon: "radio" },
     { label: "App Health Monitoring", icon: "phone-portrait", tab: "control", sub: "health" },
@@ -376,6 +377,7 @@ export default function AdminDashboard() {
           {tab === "control" ? <ControlManager onToast={flash} initial={controlView} /> : null}
 
           {tab === "users" ? <UsersManager onToast={flash} /> : null}
+          {tab === "layout" ? <LayoutManager onToast={flash} /> : null}
 
           {tab === "artists" ? (
             <>

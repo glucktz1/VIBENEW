@@ -116,6 +116,33 @@ async def home_feed(user: Optional[dict] = Depends(get_optional_user)):
     if recently:
         sections.insert(0, {"id": "recent", "title": "Jump Back In", "type": "songs", "items": recently})
 
+    # --- Curated rows (admin-manageable via Layout Manager) ---
+    made = await db.songs.find({"status": "active"}, {"_id": 0}).sort("plays", -1).limit(8).to_list(8)
+    _decorate(made, await _album_map({s.get("album_id") for s in made}))
+    if made:
+        sections.append({"id": "recommended", "title": "Made for You", "type": "recommended", "items": made})
+
+    pow_albums = await db.albums.find({"status": "active"}, {"_id": 0}).sort("total_plays", -1).limit(5).to_list(5)
+    for a in pow_albums:
+        a["songs_count"] = await db.songs.count_documents({"album_id": a["album_id"], "status": "active"})
+    if pow_albums:
+        sections.append({"id": "pick_week", "title": "Pick of the Week", "type": "pick_week", "items": pow_albums})
+
+    recent_albums = await db.albums.find({"status": "active"}, {"_id": 0}).sort("created_at", -1).limit(8).to_list(8)
+    for a in recent_albums:
+        a["songs_count"] = await db.songs.count_documents({"album_id": a["album_id"], "status": "active"})
+    if recent_albums:
+        sections.append({"id": "recently_added", "title": "Recently Added", "type": "albums", "items": recent_albums})
+
+    # Apply admin Layout Manager config (order + enable/disable)
+    cfg = await db.app_config.find_one({"key": "home_layout"}, {"_id": 0})
+    layout = (cfg or {}).get("value") or []
+    if layout:
+        order_map = {row["id"]: i for i, row in enumerate(layout)}
+        disabled = {row["id"] for row in layout if not row.get("enabled", True)}
+        sections = [s for s in sections if s["id"] not in disabled]
+        sections.sort(key=lambda s: order_map.get(s["id"], 999))
+
     return {"sections": sections, "greeting_name": user.get("name") if user else None}
 
 
