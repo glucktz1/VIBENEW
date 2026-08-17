@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator,
-  Modal, Dimensions,
+  Modal, Dimensions, useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -119,6 +119,8 @@ const TAB_TITLES: Record<string, string> = {
 export default function AdminDashboard() {
   const router = useRouter();
   const { isAdmin, isGuest, loading: authLoading, user, logout } = useAuth();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 900;
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"overview" | "content" | "users" | "artists" | "withdrawals" | "analytics" | "revenue" | "transactions" | "location" | "categories" | "settings" | "advertising" | "recommendations" | "control">("overview");
@@ -239,12 +241,71 @@ export default function AdminDashboard() {
     );
   }
 
+  const sidebarBody = (
+    <>
+      <View style={styles.drawerHead}>
+        <View style={styles.brandBadge}>
+          <Ionicons name="musical-notes" size={16} color="#fff" />
+        </View>
+        <View style={{ flex: 1, marginLeft: SP.sm }}>
+          <Text style={styles.brandName}>Vibe</Text>
+          <Text style={styles.brandSub}>Admin Dashboard</Text>
+        </View>
+        {!isDesktop ? (
+          <Pressable testID="drawer-close" onPress={() => setDrawerOpen(false)} hitSlop={10}>
+            <Ionicons name="close" size={22} color={C.text} />
+          </Pressable>
+        ) : null}
+      </View>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: SP.md }}>
+        {NAV.map((node) => {
+          if (node.type === "item") {
+            const active = node.tab && node.tab === tab;
+            return <NavRow key={node.label} node={node} active={!!active} indent={false} onPress={() => onNavPress(node)} />;
+          }
+          const isOpen = !!expanded[node.key];
+          const hasActive = node.items.some((c: any) => c.tab && c.tab === tab);
+          return (
+            <View key={node.key} style={{ marginBottom: 2 }}>
+              <Pressable testID={`nav-group-${node.key}`} style={[styles.groupHead, (isOpen || hasActive) && styles.groupHeadActive]}
+                onPress={() => setExpanded((e) => ({ ...e, [node.key]: !e[node.key] }))}>
+                <Ionicons name={node.icon as any} size={18} color={isOpen || hasActive ? C.violet : C.sub} />
+                <Text style={[styles.groupLabel, (isOpen || hasActive) && { color: C.violet }]}>{node.label}</Text>
+                <Ionicons name={isOpen ? "chevron-up" : "chevron-down"} size={16} color={isOpen || hasActive ? C.violet : C.muted} />
+              </Pressable>
+              {isOpen ? node.items.map((c: any) => (
+                <NavRow key={c.label} node={c} active={!!(c.tab && c.tab === tab)} indent onPress={() => onNavPress(c)} />
+              )) : null}
+            </View>
+          );
+        })}
+      </ScrollView>
+      <View style={styles.drawerFooter}>
+        <View style={styles.footerAvatar}>
+          <Text style={styles.footerAvatarText}>{(user?.name || user?.email || "A").charAt(0).toUpperCase()}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.footerName} numberOfLines={1}>{user?.name || "Vibe Admin"}</Text>
+          <Text style={styles.footerEmail} numberOfLines={1}>{user?.email || "admin@vibe.app"}</Text>
+        </View>
+        <Pressable testID="drawer-logout" hitSlop={10} onPress={async () => { setDrawerOpen(false); await logout(); router.replace("/(tabs)"); }}>
+          <Ionicons name="log-out-outline" size={22} color={C.sub} />
+        </Pressable>
+      </View>
+    </>
+  );
+
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <View style={{ flex: 1, flexDirection: isDesktop ? "row" : "column" }}>
+        {isDesktop ? <View style={styles.desktopSidebar}>{sidebarBody}</View> : null}
+        <View style={{ flex: 1, minWidth: 0 }}>
       <View style={styles.header}>
-        <Pressable testID="admin-menu" onPress={() => setDrawerOpen(true)} hitSlop={10}>
-          <Ionicons name="menu" size={26} color={C.text} />
-        </Pressable>
+        {!isDesktop ? (
+          <Pressable testID="admin-menu" onPress={() => setDrawerOpen(true)} hitSlop={10}>
+            <Ionicons name="menu" size={26} color={C.text} />
+          </Pressable>
+        ) : <View style={{ width: 26 }} />}
         <Text style={styles.h1}>Admin Dashboard</Text>
         <Pressable testID="admin-back" onPress={() => router.replace("/(tabs)")} hitSlop={10}>
           <Ionicons name="home" size={22} color={C.sub} />
@@ -272,7 +333,7 @@ export default function AdminDashboard() {
       {loading ? (
         <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} />
       ) : (
-        <ScrollView contentContainerStyle={{ padding: SP.md, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[{ padding: SP.md, paddingBottom: 60 }, isDesktop && styles.desktopContent]} showsVerticalScrollIndicator={false}>
           {tab === "overview" ? (
             <DashboardOverview
               overview={overview} trends={trends} demographics={demographics}
@@ -630,72 +691,19 @@ export default function AdminDashboard() {
       )}
 
       {toast ? <View style={styles.toast}><Text style={styles.toastText}>{toast}</Text></View> : null}
+        </View>
+      </View>
 
-      {/* Side drawer navigation — faithful accordion sidebar */}
-      <Modal transparent visible={drawerOpen} animationType="slide" onRequestClose={() => setDrawerOpen(false)}>
-        <Pressable style={styles.drawerOverlay} onPress={() => setDrawerOpen(false)}>
-          <Pressable style={styles.drawer} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.drawerHead}>
-              <View style={styles.brandBadge}>
-                <Ionicons name="musical-notes" size={16} color="#fff" />
-              </View>
-              <View style={{ flex: 1, marginLeft: SP.sm }}>
-                <Text style={styles.brandName}>Vibe</Text>
-                <Text style={styles.brandSub}>Admin Dashboard</Text>
-              </View>
-              <Pressable testID="drawer-close" onPress={() => setDrawerOpen(false)} hitSlop={10}>
-                <Ionicons name="close" size={22} color={C.text} />
-              </Pressable>
-            </View>
-
-            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: SP.md }}>
-              {NAV.map((node, ni) => {
-                if (node.type === "item") {
-                  const active = node.tab && node.tab === tab;
-                  return (
-                    <NavRow key={node.label} node={node} active={!!active} indent={false}
-                      onPress={() => onNavPress(node)} />
-                  );
-                }
-                // group
-                const isOpen = !!expanded[node.key];
-                const hasActive = node.items.some((c: any) => c.tab && c.tab === tab);
-                return (
-                  <View key={node.key} style={{ marginBottom: 2 }}>
-                    <Pressable
-                      testID={`nav-group-${node.key}`}
-                      style={[styles.groupHead, (isOpen || hasActive) && styles.groupHeadActive]}
-                      onPress={() => setExpanded((e) => ({ ...e, [node.key]: !e[node.key] }))}
-                    >
-                      <Ionicons name={node.icon as any} size={18} color={isOpen || hasActive ? C.violet : C.sub} />
-                      <Text style={[styles.groupLabel, (isOpen || hasActive) && { color: C.violet }]}>{node.label}</Text>
-                      <Ionicons name={isOpen ? "chevron-up" : "chevron-down"} size={16} color={isOpen || hasActive ? C.violet : C.muted} />
-                    </Pressable>
-                    {isOpen ? node.items.map((c: any) => (
-                      <NavRow key={c.label} node={c} active={!!(c.tab && c.tab === tab)} indent
-                        onPress={() => onNavPress(c)} />
-                    )) : null}
-                  </View>
-                );
-              })}
-            </ScrollView>
-
-            {/* Footer: admin identity + logout */}
-            <View style={styles.drawerFooter}>
-              <View style={styles.footerAvatar}>
-                <Text style={styles.footerAvatarText}>{(user?.name || user?.email || "A").charAt(0).toUpperCase()}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.footerName} numberOfLines={1}>{user?.name || "Vibe Admin"}</Text>
-                <Text style={styles.footerEmail} numberOfLines={1}>{user?.email || "admin@vibe.app"}</Text>
-              </View>
-              <Pressable testID="drawer-logout" hitSlop={10} onPress={async () => { setDrawerOpen(false); await logout(); router.replace("/(tabs)"); }}>
-                <Ionicons name="log-out-outline" size={22} color={C.sub} />
-              </Pressable>
-            </View>
+      {/* Side drawer navigation — mobile only */}
+      {!isDesktop ? (
+        <Modal transparent visible={drawerOpen} animationType="slide" onRequestClose={() => setDrawerOpen(false)}>
+          <Pressable style={styles.drawerOverlay} onPress={() => setDrawerOpen(false)}>
+            <Pressable style={styles.drawer} onPress={(e) => e.stopPropagation()}>
+              {sidebarBody}
+            </Pressable>
           </Pressable>
-        </Pressable>
-      </Modal>
+        </Modal>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -988,6 +996,8 @@ function NavRow({ node, active, indent, onPress }: any) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+  desktopSidebar: { width: 280, height: "100%", backgroundColor: C.card, borderRightWidth: 1, borderRightColor: C.border, paddingTop: SP.md },
+  desktopContent: { maxWidth: 1200, width: "100%", alignSelf: "center", paddingHorizontal: SP.lg },
   center: { flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center", padding: SP.lg },
   denied: { color: C.text, fontSize: 16, fontWeight: "700", marginTop: SP.md },
   deniedSub: { color: C.sub, fontSize: 14, textAlign: "center", marginTop: SP.sm, paddingHorizontal: SP.lg },

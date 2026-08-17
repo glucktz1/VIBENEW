@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator,
-  Modal, TextInput, KeyboardAvoidingView, Platform, RefreshControl,
+  Modal, TextInput, KeyboardAvoidingView, Platform, RefreshControl, useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,6 +13,8 @@ import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 
 export default function ArtistDashboard() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 900;
   const [me, setMe] = useState<any>(null);
   const [earnings, setEarnings] = useState<any>(null);
   const [albums, setAlbums] = useState<any[]>([]);
@@ -134,7 +136,7 @@ export default function ArtistDashboard() {
         ))}
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: SPACING.md, paddingBottom: 60 }}
+      <ScrollView contentContainerStyle={[{ padding: SPACING.md, paddingBottom: 60 }, isDesktop && styles.desktopContent]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
         showsVerticalScrollIndicator={false}>
 
@@ -315,6 +317,7 @@ function SaveBtn({ tid, busy, onPress, label }: any) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.background },
+  desktopContent: { maxWidth: 900, width: "100%", alignSelf: "center" },
   center: { flex: 1, backgroundColor: COLORS.background, alignItems: "center", justifyContent: "center" },
   header: { flexDirection: "row", alignItems: "center", padding: SPACING.md },
   hName: { color: COLORS.text, fontSize: FONT.lg, fontWeight: "800" },
