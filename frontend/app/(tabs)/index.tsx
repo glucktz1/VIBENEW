@@ -112,7 +112,7 @@ export default function Home() {
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={{ paddingRight: SPACING.md }}
-                  renderItem={({ item }) => <AlbumCard album={item} />}
+                  renderItem={({ item }) => <AlbumCard album={item} width={120} />}
                 />
               ) : section.type === "artists" ? (
                 <FlatList
@@ -169,6 +169,21 @@ export default function Home() {
                     </Pressable>
                   )}
                 />
+              ) : section.type === "recently" ? (
+                <FlatList
+                  data={section.items}
+                  keyExtractor={(a) => a.album_id}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingRight: SPACING.md }}
+                  renderItem={({ item }) => (
+                    <Pressable testID={`home-recent-${item.album_id}`} style={styles.recentCard} onPress={() => router.push(`/album/${item.album_id}`)}>
+                      <Image source={{ uri: item.thumbnail }} style={styles.recentArt} contentFit="cover" transition={200} />
+                      <Text style={styles.recentTitle} numberOfLines={1}>{item.title}</Text>
+                      <Text style={styles.recentSub} numberOfLines={1}>{item.artist_name || "Vibe"}</Text>
+                    </Pressable>
+                  )}
+                />
               ) : (
                 <FlatList
                   data={section.items}
@@ -215,30 +230,35 @@ const styles = StyleSheet.create({
   quickGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginBottom: SPACING.lg },
   quickTile: {
     width: "48.5%", flexDirection: "row", alignItems: "center", backgroundColor: COLORS.card,
-    borderRadius: RADIUS.md, padding: SPACING.sm, marginBottom: SPACING.sm, borderWidth: 1, borderColor: COLORS.border,
+    borderRadius: RADIUS.md, marginBottom: SPACING.sm, overflow: "hidden", height: 56,
   },
-  quickIcon: { width: 36, height: 36, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center" },
-  quickLabel: { color: COLORS.text, fontSize: FONT.md, fontWeight: "700", marginLeft: SPACING.sm, flex: 1 },
+  quickIcon: { width: 56, height: 56, alignItems: "center", justifyContent: "center" },
+  quickLabel: { color: COLORS.text, fontSize: 13, fontWeight: "700", marginLeft: SPACING.sm, marginRight: SPACING.xs, flex: 1 },
   section: { marginBottom: SPACING.lg },
-  artistCard: { width: 110, marginRight: SPACING.md, alignItems: "center" },
-  artistArt: { width: 100, height: 100, borderRadius: 50, backgroundColor: COLORS.surface },
+  artistCard: { width: 96, marginRight: SPACING.md, alignItems: "center" },
+  artistArt: { width: 88, height: 88, borderRadius: 44, backgroundColor: COLORS.surface },
   artistFallback: { alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primary },
-  artistName: { color: COLORS.text, fontSize: FONT.md, fontWeight: "700", marginTop: SPACING.sm, textAlign: "center" },
-  recCard: { flexDirection: "row", alignItems: "center", width: 260, marginRight: SPACING.md, backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: SPACING.sm },
-  recArt: { width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.background },
-  recPlay: { width: 34, height: 34, borderRadius: 17, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center" },
-  pickCard: { width: 300, height: 150, marginRight: SPACING.md, borderRadius: RADIUS.xl, overflow: "hidden", backgroundColor: COLORS.surface },
+  artistName: { color: COLORS.text, fontSize: FONT.sm, fontWeight: "700", marginTop: SPACING.sm, textAlign: "center" },
+  recCard: { flexDirection: "row", alignItems: "center", width: 182, marginRight: SPACING.md, backgroundColor: COLORS.surface, borderRadius: RADIUS.md, padding: SPACING.sm },
+  recArt: { width: 52, height: 52, borderRadius: 6, backgroundColor: COLORS.background },
+  recPlay: { width: 30, height: 30, borderRadius: 15, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center" },
+  pickCard: { width: 192, height: 96, marginRight: SPACING.md, borderRadius: RADIUS.lg, overflow: "hidden", backgroundColor: COLORS.surface },
   pickArt: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
-  pickOverlay: { position: "absolute", left: 0, right: 0, bottom: 0, padding: SPACING.md, backgroundColor: "rgba(0,0,0,0.45)" },
-  pickTitle: { color: "#fff", fontSize: FONT.lg, fontWeight: "800" },
-  pickSub: { color: "rgba(255,255,255,0.85)", fontSize: FONT.sm, marginTop: 2 },
-  pickPlay: { position: "absolute", top: SPACING.md, right: SPACING.md, width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center" },  sectionTitle: { color: COLORS.text, fontSize: FONT.xl, fontWeight: "800", marginBottom: SPACING.md },
-  songCard: { width: 140, marginRight: SPACING.md },
-  songArt: { width: 140, height: 140, borderRadius: RADIUS.lg, backgroundColor: COLORS.surface },
+  pickOverlay: { position: "absolute", left: 0, right: 0, bottom: 0, padding: SPACING.sm, backgroundColor: "rgba(0,0,0,0.45)" },
+  pickTitle: { color: "#fff", fontSize: FONT.sm, fontWeight: "800" },
+  pickSub: { color: "rgba(255,255,255,0.85)", fontSize: FONT.xs, marginTop: 2 },
+  pickPlay: { position: "absolute", top: SPACING.sm, right: SPACING.sm, width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center" },
+  recentCard: { width: 104, marginRight: SPACING.md },
+  recentArt: { width: 104, height: 104, borderRadius: RADIUS.md, backgroundColor: COLORS.surface },
+  recentTitle: { color: COLORS.text, fontSize: FONT.sm, fontWeight: "700", marginTop: SPACING.sm },
+  recentSub: { color: COLORS.textSecondary, fontSize: FONT.xs, marginTop: 2 },
+  sectionTitle: { color: COLORS.text, fontSize: FONT.xl, fontWeight: "800", marginBottom: SPACING.sm, letterSpacing: -0.5 },
+  songCard: { width: 112, marginRight: SPACING.md },
+  songArt: { width: 112, height: 112, borderRadius: RADIUS.md, backgroundColor: COLORS.surface },
   songPlay: {
-    position: "absolute", right: SPACING.sm, top: 100, width: 34, height: 34, borderRadius: RADIUS.full,
+    position: "absolute", right: SPACING.xs, top: 76, width: 32, height: 32, borderRadius: RADIUS.full,
     backgroundColor: COLORS.success, alignItems: "center", justifyContent: "center",
   },
-  songTitle: { color: COLORS.text, fontSize: FONT.md, fontWeight: "700", marginTop: SPACING.sm },
-  songArtist: { color: COLORS.textSecondary, fontSize: FONT.sm, marginTop: 2 },
+  songTitle: { color: COLORS.text, fontSize: FONT.sm, fontWeight: "700", marginTop: SPACING.sm },
+  songArtist: { color: COLORS.textSecondary, fontSize: FONT.xs, marginTop: 2 },
 });

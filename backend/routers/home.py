@@ -132,7 +132,7 @@ async def home_feed(user: Optional[dict] = Depends(get_optional_user)):
     for a in recent_albums:
         a["songs_count"] = await db.songs.count_documents({"album_id": a["album_id"], "status": "active"})
     if recent_albums:
-        sections.append({"id": "recently_added", "title": "Recently Added", "type": "albums", "items": recent_albums})
+        sections.append({"id": "recently_added", "title": "Recently Added", "type": "recently", "items": recent_albums})
 
     # Apply admin Layout Manager config (order + enable/disable)
     cfg = await db.app_config.find_one({"key": "home_layout"}, {"_id": 0})

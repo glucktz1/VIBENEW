@@ -282,3 +282,14 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - NEW LayoutManager.tsx: list rows with up/down reorder + enable/disable Switch + Save; wired to "Layout Management" sidebar (tab:"layout")
 - (tabs)/index.tsx: renders type "recommended" (rounded row cards + play), "pick_week" (wide dark cover card + play), recently_added uses AlbumCard
 - Verified backend: layout save reorders/hides home sections (pick_week first, trending hidden). Reset to default after test.
+
+## Session 17 — Spotify-style Home tile sizing + typography
+- (tabs)/index.tsx: adopted Spotify tile sizes/fonts per user reference image.
+  - Quick grid: flush colored icon block (56x56) left + bold 13px label, overflow hidden, no border (Spotify quick tiles).
+  - Made for You (recommended): compact row card 182w + square 52px thumb (30% narrower).
+  - Pick of the Week: 192x96 (was 240x120, ~20% smaller).
+  - Songs rows (Trending/Jump Back In): songCard 112px (was 140, ~20% smaller).
+  - Albums rows: AlbumCard width={120} (was 150, 20% smaller).
+  - Recently Added: NEW dedicated "recently" branch — small square tiles (recentCard 104px) with title + artist sub, navigates to /album/[id]. Previously fell through to broken songs branch.
+  - Section titles: tighter (letterSpacing -0.5, marginBottom sm); artist avatars 88px.
+- Verified via screenshot on 390px viewport — matches Spotify reference.
