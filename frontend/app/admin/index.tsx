@@ -143,9 +143,10 @@ export default function AdminDashboard() {
   const [txns, setTxns] = useState<any>(null);
   const [location, setLocation] = useState<any>(null);
   const [txStatus, setTxStatus] = useState("all");
-  const [analyticsSub, setAnalyticsSub] = useState<"overview" | "datausage">("overview");
+  const [analyticsSub, setAnalyticsSub] = useState<"overview" | "users" | "revenue" | "content" | "replays" | "devices" | "datausage">("overview");
   const [aPeriod, setAPeriod] = useState<"7 Days" | "30 Days" | "90 Days" | "1 Year">("30 Days");
   const [dataUsage, setDataUsage] = useState<any>(null);
+  const [breakdown, setBreakdown] = useState<any>(null);
   const pollRef = useRef<any>(null);
 
   const load = useCallback(async () => {
@@ -191,7 +192,9 @@ export default function AdminDashboard() {
     if (tab === "location" && !location) adminApi.locationOverview().then(setLocation).catch(() => {});
     if (tab === "transactions") adminApi.transactions(txStatus).then(setTxns).catch(() => {});
     if (tab === "analytics" && analyticsSub === "datausage" && !dataUsage) adminApi.dataUsage(30).then(setDataUsage).catch(() => {});
-  }, [tab, txStatus, isAdmin, revenue, location, analyticsSub, dataUsage]);
+    if (tab === "analytics" && (analyticsSub === "users" || analyticsSub === "content" || analyticsSub === "replays" || analyticsSub === "devices") && !breakdown) adminApi.breakdown().then(setBreakdown).catch(() => {});
+    if (tab === "analytics" && analyticsSub === "revenue" && !revenue) adminApi.revenueOverview().then(setRevenue).catch(() => {});
+  }, [tab, txStatus, isAdmin, revenue, location, analyticsSub, dataUsage, breakdown]);
 
   // fetch enhanced analytics on tab open + whenever the period filter changes
   useEffect(() => {
@@ -465,13 +468,13 @@ export default function AdminDashboard() {
                   ))}
                 </ScrollView>
 
-                <View style={styles.subTabs}>
-                  {([["overview", "Overview"], ["datausage", "Data Usage"]] as const).map(([k, l]) => (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTabs}>
+                  {([["overview", "Overview"], ["users", "Users"], ["revenue", "Revenue"], ["content", "Content"], ["replays", "Replays"], ["devices", "Devices"], ["datausage", "Data Usage"]] as const).map(([k, l]) => (
                     <Pressable key={k} testID={`analytics-sub-${k}`} style={[styles.subTab, analyticsSub === k && styles.subTabOn]} onPress={() => setAnalyticsSub(k as any)}>
                       <Text style={[styles.subTabText, analyticsSub === k && { color: "#fff" }]}>{l}</Text>
                     </Pressable>
                   ))}
-                </View>
+                </ScrollView>
 
                 {analyticsSub === "overview" ? (
                   <>
@@ -545,6 +548,135 @@ export default function AdminDashboard() {
                       ) : <Empty />}
                     </ChartCard>
                   </>
+                ) : analyticsSub === "users" ? (
+                  !breakdown ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
+                    <>
+                      <View style={styles.statGrid}>
+                        {[
+                          { l: "Total Users", v: Number(breakdown.users.total).toLocaleString(), c: C.violet, i: "people" },
+                          { l: "Premium Users", v: Number(breakdown.users.premium).toLocaleString(), c: C.amber, i: "star" },
+                          { l: "Free Users", v: Number(breakdown.users.free).toLocaleString(), c: C.blue, i: "person" },
+                          { l: "Premium Rate", v: `${breakdown.users.premium_pct}%`, c: C.emerald, i: "trending-up" },
+                        ].map((s, i) => (
+                          <View key={i} style={styles.statCard}>
+                            <View style={[styles.statIcon, { backgroundColor: s.c + "22" }]}><Ionicons name={s.i as any} size={20} color={s.c} /></View>
+                            <Text style={styles.statValue} numberOfLines={1}>{s.v}</Text>
+                            <Text style={styles.statLabel}>{s.l}</Text>
+                          </View>
+                        ))}
+                      </View>
+                      <ChartCard icon="trending-up" iconColor={C.violet} title="User Growth" desc="New sign-ups (last 6 months)">
+                        {breakdown.users.growth?.some((d: any) => d.new > 0) ? (
+                          <BarChart
+                            data={breakdown.users.growth.map((d: any) => ({ value: d.new, label: d.month, frontColor: C.violet }))}
+                            barWidth={20} barBorderRadius={4} spacing={18}
+                            yAxisColor={C.border} xAxisColor={C.border} yAxisTextStyle={styles.axis} xAxisLabelTextStyle={styles.axis}
+                            height={170} noOfSections={4} initialSpacing={12} backgroundColor="transparent" />
+                        ) : <Empty />}
+                      </ChartCard>
+                      <ChartCard icon="pie-chart" iconColor={C.amber} title="Premium vs Free">
+                        {breakdown.users.total ? (
+                          <>
+                            <View style={{ alignItems: "center", marginVertical: SP.sm }}>
+                              <PieChart donut innerRadius={50} radius={85} innerCircleColor={C.card}
+                                data={[{ value: breakdown.users.premium, color: C.amber }, { value: breakdown.users.free, color: C.blue }]} />
+                            </View>
+                            <Legend items={[{ c: C.amber, t: `Premium (${breakdown.users.premium})` }, { c: C.blue, t: `Free (${breakdown.users.free})` }]} />
+                          </>
+                        ) : <Empty />}
+                      </ChartCard>
+                    </>
+                  )
+                ) : analyticsSub === "revenue" ? (
+                  !revenue ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
+                    <>
+                      <View style={styles.statGrid}>
+                        {[
+                          { l: "Gross Revenue", v: `TZS ${Number(revenue.gross_revenue).toLocaleString()}`, c: C.emerald, i: "cash" },
+                          { l: "Platform Earnings", v: `TZS ${Number(revenue.platform_earnings).toLocaleString()}`, c: C.amber, i: "trending-up" },
+                          { l: "Artist Payouts", v: `TZS ${Number(revenue.artist_payouts).toLocaleString()}`, c: C.pink, i: "wallet" },
+                          { l: "Listening Hours", v: revenue.total_listening_hours, c: C.violet, i: "time" },
+                        ].map((s, i) => (
+                          <View key={i} style={styles.statCard}>
+                            <View style={[styles.statIcon, { backgroundColor: s.c + "22" }]}><Ionicons name={s.i as any} size={20} color={s.c} /></View>
+                            <Text style={styles.statValue} numberOfLines={1}>{s.v}</Text>
+                            <Text style={styles.statLabel}>{s.l}</Text>
+                          </View>
+                        ))}
+                      </View>
+                      <ChartCard icon="cash" iconColor={C.emerald} title="Revenue Over Time" desc="Last 14 days">
+                        {revenue.daily?.some((d: any) => d.amount > 0) ? (
+                          <LineChart areaChart curved
+                            data={revenue.daily.map((d: any) => ({ value: d.amount, label: d.date }))}
+                            color={C.emerald} startFillColor={C.emerald} endFillColor={C.emerald} startOpacity={0.3} endOpacity={0.02}
+                            thickness={2} hideDataPoints hideRules yAxisColor={C.border} xAxisColor={C.border}
+                            yAxisTextStyle={styles.axis} xAxisLabelTextStyle={styles.axis}
+                            width={CHART_W - 40} height={170} noOfSections={4} initialSpacing={8} backgroundColor="transparent" />
+                        ) : <Empty />}
+                      </ChartCard>
+                      <ChartCard icon="mic" iconColor={C.violet} title="Top Earning Artists">
+                        {revenue.top_artists?.length ? revenue.top_artists.map((a: any, i: number) => (
+                          <View key={i} style={styles.rankRow}>
+                            <Text style={styles.locRank}>{i + 1}.</Text>
+                            <Text style={styles.locName} numberOfLines={1}>{a.name}</Text>
+                            <Text style={styles.locVal}>TZS {Number(a.gross).toLocaleString()}</Text>
+                          </View>
+                        )) : <Empty />}
+                      </ChartCard>
+                    </>
+                  )
+                ) : analyticsSub === "content" ? (
+                  !breakdown ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
+                    <>
+                      <View style={styles.statGrid}>
+                        {[
+                          { l: "Total Albums", v: Number(breakdown.content.total_albums).toLocaleString(), c: C.violet, i: "albums" },
+                          { l: "Total Songs", v: Number(breakdown.content.total_songs).toLocaleString(), c: C.blue, i: "musical-notes" },
+                        ].map((s, i) => (
+                          <View key={i} style={styles.statCard}>
+                            <View style={[styles.statIcon, { backgroundColor: s.c + "22" }]}><Ionicons name={s.i as any} size={20} color={s.c} /></View>
+                            <Text style={styles.statValue} numberOfLines={1}>{s.v}</Text>
+                            <Text style={styles.statLabel}>{s.l}</Text>
+                          </View>
+                        ))}
+                      </View>
+                      <ChartCard icon="albums" iconColor={C.violet} title="Top Albums by Plays">
+                        {breakdown.content.top_albums?.length ? breakdown.content.top_albums.map((a: any, i: number) => (
+                          <View key={i} style={styles.rankRow}>
+                            <Text style={styles.locRank}>{i + 1}.</Text>
+                            <Text style={styles.locName} numberOfLines={1}>{a.title}</Text>
+                            <Text style={styles.locVal}>{Number(a.plays).toLocaleString()} ▶</Text>
+                          </View>
+                        )) : <Empty />}
+                      </ChartCard>
+                    </>
+                  )
+                ) : analyticsSub === "replays" ? (
+                  !breakdown ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
+                    <ChartCard icon="repeat" iconColor={C.pink} title="Most Replayed Songs" desc="Ranked by total plays">
+                      {breakdown.replays.top?.length ? breakdown.replays.top.map((s: any, i: number) => (
+                        <View key={i} style={styles.rankRow}>
+                          <Text style={styles.locRank}>{i + 1}.</Text>
+                          <Text style={styles.locName} numberOfLines={1}>{s.title}</Text>
+                          <Text style={styles.locVal}>{Number(s.plays).toLocaleString()} ▶</Text>
+                        </View>
+                      )) : <Empty />}
+                    </ChartCard>
+                  )
+                ) : analyticsSub === "devices" ? (
+                  !breakdown ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
+                    <ChartCard icon="phone-portrait" iconColor={C.blue} title="Device Distribution" desc="Listeners by device type">
+                      {breakdown.devices.data?.length ? (
+                        <>
+                          <View style={{ alignItems: "center", marginVertical: SP.sm }}>
+                            <PieChart donut innerRadius={50} radius={85} innerCircleColor={C.card}
+                              data={breakdown.devices.data.map((d: any, i: number) => ({ value: d.value, color: PIE_COLORS[i % PIE_COLORS.length] }))} />
+                          </View>
+                          <Legend items={breakdown.devices.data.map((d: any, i: number) => ({ c: PIE_COLORS[i % PIE_COLORS.length], t: `${d.name} (${d.value})` }))} />
+                        </>
+                      ) : <Empty />}
+                    </ChartCard>
+                  )
                 ) : (
                   !dataUsage ? <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} /> : (
                     <>
@@ -1039,8 +1171,8 @@ const styles = StyleSheet.create({
   crumb: { flexDirection: "row", alignItems: "center", marginHorizontal: SP.md, paddingVertical: SP.sm },
   crumbText: { color: C.violet, fontWeight: "700", fontSize: 13 },
   crumbCur: { color: C.sub, fontWeight: "700", fontSize: 13 },
-  subTabs: { flexDirection: "row", flexWrap: "wrap", gap: SP.sm, marginBottom: SP.md },
-  subTab: { paddingHorizontal: SP.md, height: 34, borderRadius: 9999, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
+  subTabs: { marginBottom: SP.md },
+  subTab: { paddingHorizontal: SP.md, height: 34, borderRadius: 9999, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center", marginRight: SP.sm },
   subTabOn: { backgroundColor: C.violet, borderColor: C.violet },
   subTabText: { color: C.sub, fontWeight: "700", fontSize: 12 },
   hlRow: { flexDirection: "row", gap: SP.sm, marginBottom: SP.sm },

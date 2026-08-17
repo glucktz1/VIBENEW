@@ -39,10 +39,13 @@ export default function ContentManager({ onToast }: { onToast: (m: string) => vo
   const [saving, setSaving] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [songsByAlbum, setSongsByAlbum] = useState<Record<string, any[]>>({});
-  const [songModal, setSongModal] = useState<any>(null); // { album, mode: 'single'|'bulk' }
+  const [songModal, setSongModal] = useState<any>(null); // { album, mode: 'single'|'multi'|'bulk' }
   const [songForm, setSongForm] = useState<any>({ title: "", audio_url: "", source: "cdn", fileName: "" });
   const [bulkText, setBulkText] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [singleProgress, setSingleProgress] = useState(0);
+  const [uploadQueue, setUploadQueue] = useState<any[]>([]); // [{ name, progress, status, audio_url }]
+  const [songEdit, setSongEdit] = useState<any>(null); // { album_id, song_id, title, status }
 
   const toggleExpand = async (a: any) => {
     setMenuFor(null);
@@ -61,13 +64,31 @@ export default function ContentManager({ onToast }: { onToast: (m: string) => vo
     const res = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true });
     if (res.canceled || !res.assets?.length) return;
     const asset = res.assets[0];
-    setUploading(true);
+    setUploading(true); setSingleProgress(0);
     try {
-      const up = await adminApi.uploadAudio(asset.uri, asset.name || "audio.mp3", asset.mimeType || "audio/mpeg");
+      const up = await adminApi.uploadAudio(asset.uri, asset.name || "audio.mp3", asset.mimeType || "audio/mpeg", (p) => setSingleProgress(p));
       setSongForm((f: any) => ({ ...f, audio_url: `${BASE_URL}${up.media_url}`, source: "upload", fileName: asset.name, title: f.title || (asset.name || "").replace(/\.[^.]+$/, "") }));
       onToast("Uploaded — will encode to HLS");
     } catch (e: any) { onToast(e.message); } finally { setUploading(false); }
   };
+  const pickAndUploadMulti = async () => {
+    const res = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true, multiple: true });
+    if (res.canceled || !res.assets?.length) return;
+    const assets = res.assets;
+    setUploadQueue(assets.map((a) => ({ name: a.name || "audio.mp3", progress: 0, status: "uploading", audio_url: "" })));
+    for (let i = 0; i < assets.length; i++) {
+      const a = assets[i];
+      try {
+        const up = await adminApi.uploadAudio(a.uri, a.name || `audio${i}.mp3`, a.mimeType || "audio/mpeg", (p) => {
+          setUploadQueue((q) => q.map((it, idx) => (idx === i ? { ...it, progress: p } : it)));
+        });
+        setUploadQueue((q) => q.map((it, idx) => (idx === i ? { ...it, progress: 1, status: "done", audio_url: `${BASE_URL}${up.media_url}` } : it)));
+      } catch {
+        setUploadQueue((q) => q.map((it, idx) => (idx === i ? { ...it, status: "error" } : it)));
+      }
+    }
+  };
+  const closeSongModal = () => { setSongModal(null); setSongForm({ title: "", audio_url: "", source: "cdn", fileName: "" }); setBulkText(""); setUploadQueue([]); setSingleProgress(0); };
   const saveSong = async () => {
     if (!songModal) return;
     setSaving(true);
@@ -78,17 +99,40 @@ export default function ContentManager({ onToast }: { onToast: (m: string) => vo
         if (!songs.length) { onToast("Add lines like: Title | https://cdn/url.mp3"); setSaving(false); return; }
         await adminApi.addAlbumSongsBulk(songModal.album.album_id, songs);
         onToast(`${songs.length} songs added`);
+      } else if (songModal.mode === "multi") {
+        const done = uploadQueue.filter((it) => it.status === "done" && it.audio_url);
+        if (!done.length) { onToast("Upload at least one file first"); setSaving(false); return; }
+        const songs = done.map((it) => ({ title: it.name.replace(/\.[^.]+$/, ""), audio_url: it.audio_url, source: "upload" }));
+        await adminApi.addAlbumSongsBulk(songModal.album.album_id, songs);
+        onToast(`${songs.length} songs added`);
       } else {
         if (!songForm.title.trim() || !songForm.audio_url) { onToast("Title & audio required"); setSaving(false); return; }
         await adminApi.addAlbumSong(songModal.album.album_id, { title: songForm.title.trim(), audio_url: songForm.audio_url, source: songForm.source });
         onToast("Song added");
       }
-      setSongModal(null); setSongForm({ title: "", audio_url: "", source: "cdn", fileName: "" }); setBulkText("");
-      await refreshSongs(songModal.album.album_id); await load();
+      const albumId = songModal.album.album_id;
+      closeSongModal();
+      await refreshSongs(albumId); await load();
     } catch (e: any) { onToast(e.message); } finally { setSaving(false); }
   };
   const delSong = async (albumId: string, songId: string) => {
     try { await adminApi.deleteSong(songId); await refreshSongs(albumId); await load(); onToast("Song removed"); } catch (e: any) { onToast(e.message); }
+  };
+  const toggleSongStatus = async (albumId: string, s: any) => {
+    const next = (s.status || "active") === "inactive" ? "active" : "inactive";
+    try { await adminApi.songStatus(s.song_id, next); await refreshSongs(albumId); onToast(next === "active" ? "Song activated" : "Song deactivated"); }
+    catch (e: any) { onToast(e.message); }
+  };
+  const saveSongEdit = async () => {
+    if (!songEdit) return;
+    if (!songEdit.title.trim()) { onToast("Song name required"); return; }
+    setSaving(true);
+    try {
+      await adminApi.updateSong(songEdit.song_id, { title: songEdit.title.trim(), status: songEdit.status });
+      const albumId = songEdit.album_id;
+      setSongEdit(null);
+      await refreshSongs(albumId); onToast("Song updated");
+    } catch (e: any) { onToast(e.message); } finally { setSaving(false); }
   };
 
   const load = useCallback(async () => {
@@ -217,8 +261,10 @@ export default function ContentManager({ onToast }: { onToast: (m: string) => vo
           {expanded ? (
             <View style={styles.songsBox}>
               {songs.length === 0 ? <Text style={styles.emptySmall}>No songs yet. Use the ⋮ menu to add.</Text> : null}
-              {songs.map((s: any, i: number) => (
-                <View key={s.song_id} style={styles.songRow}>
+              {songs.map((s: any, i: number) => {
+                const inactive = (s.status || "active") === "inactive";
+                return (
+                <View key={s.song_id} style={[styles.songRow, inactive && { opacity: 0.5 }]}>
                   <Text style={styles.songNum}>{i + 1}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.songTitle} numberOfLines={1}>{s.title}</Text>
@@ -227,12 +273,18 @@ export default function ContentManager({ onToast }: { onToast: (m: string) => vo
                         <Ionicons name={s.hls_status === "ready" ? "checkmark-circle" : "sync"} size={10} color={s.hls_status === "ready" ? C.emerald : C.amber} />
                         <Text style={[styles.hlsText, { color: s.hls_status === "ready" ? C.emerald : C.amber }]}>HLS {s.hls_status || "ready"}</Text>
                       </View>
+                      <View style={[styles.hlsBadge, { backgroundColor: (inactive ? C.muted : C.emerald) + "22" }]}>
+                        <Text style={[styles.hlsText, { color: inactive ? C.muted : C.emerald }]}>{inactive ? "hidden" : "active"}</Text>
+                      </View>
                       <Text style={styles.srcText}>{s.encoding_source === "upload" ? "uploaded" : "CDN"}</Text>
                     </View>
                   </View>
+                  <Pressable testID={`song-edit-${s.song_id}`} hitSlop={8} onPress={() => setSongEdit({ album_id: a.album_id, song_id: s.song_id, title: s.title || "", status: s.status || "active" })}><Ionicons name="create-outline" size={16} color={C.sub} /></Pressable>
+                  <Pressable testID={`song-toggle-${s.song_id}`} hitSlop={8} onPress={() => toggleSongStatus(a.album_id, s)}><Ionicons name={inactive ? "eye-outline" : "eye-off-outline"} size={16} color={C.amber} /></Pressable>
                   <Pressable testID={`song-del-${s.song_id}`} hitSlop={8} onPress={() => delSong(a.album_id, s.song_id)}><Ionicons name="trash-outline" size={16} color={C.red} /></Pressable>
                 </View>
-              ))}
+                );
+              })}
               <View style={styles.songActions}>
                 <Pressable testID={`addsong-${a.album_id}`} style={styles.songBtn} onPress={() => setSongModal({ album: a, mode: "single" })}><Ionicons name="add" size={16} color="#fff" /><Text style={styles.songBtnText}>Add Song</Text></Pressable>
                 <Pressable testID={`bulksong-${a.album_id}`} style={[styles.songBtn, { backgroundColor: C.blue }]} onPress={() => setSongModal({ album: a, mode: "bulk" })}><Ionicons name="albums" size={15} color="#fff" /><Text style={styles.songBtnText}>Bulk Add</Text></Pressable>
@@ -244,24 +296,44 @@ export default function ContentManager({ onToast }: { onToast: (m: string) => vo
       })}
       {filtered.length === 0 ? <Text style={styles.empty}>No albums match your filters.</Text> : null}
 
-      {/* Add song modal (single / bulk) */}
-      <Modal transparent visible={!!songModal} animationType="slide" onRequestClose={() => setSongModal(null)}>
+      {/* Add song modal (single / multi upload / bulk cdn) */}
+      <Modal transparent visible={!!songModal} animationType="slide" onRequestClose={closeSongModal}>
         <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <View style={styles.sheet}>
             <View style={styles.sheetHead}>
-              <Text style={styles.sheetTitle}>{songModal?.mode === "bulk" ? "Bulk Add Songs" : "Add Song"}</Text>
-              <Pressable testID="song-modal-close" onPress={() => setSongModal(null)} hitSlop={10}><Ionicons name="close" size={22} color={C.text} /></Pressable>
+              <Text style={styles.sheetTitle}>Add Songs</Text>
+              <Pressable testID="song-modal-close" onPress={closeSongModal} hitSlop={10}><Ionicons name="close" size={22} color={C.text} /></Pressable>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled">
               <View style={styles.modeRow}>
                 <Pressable testID="song-mode-single" style={[styles.modeBtn, songModal?.mode === "single" && styles.modeOn]} onPress={() => setSongModal((m: any) => ({ ...m, mode: "single" }))}><Text style={[styles.modeText, songModal?.mode === "single" && { color: "#fff" }]}>Single</Text></Pressable>
-                <Pressable testID="song-mode-bulk" style={[styles.modeBtn, songModal?.mode === "bulk" && styles.modeOn]} onPress={() => setSongModal((m: any) => ({ ...m, mode: "bulk" }))}><Text style={[styles.modeText, songModal?.mode === "bulk" && { color: "#fff" }]}>Bulk</Text></Pressable>
+                <Pressable testID="song-mode-multi" style={[styles.modeBtn, songModal?.mode === "multi" && styles.modeOn]} onPress={() => setSongModal((m: any) => ({ ...m, mode: "multi" }))}><Text style={[styles.modeText, songModal?.mode === "multi" && { color: "#fff" }]}>Upload Files</Text></Pressable>
+                <Pressable testID="song-mode-bulk" style={[styles.modeBtn, songModal?.mode === "bulk" && styles.modeOn]} onPress={() => setSongModal((m: any) => ({ ...m, mode: "bulk" }))}><Text style={[styles.modeText, songModal?.mode === "bulk" && { color: "#fff" }]}>Bulk CDN</Text></Pressable>
               </View>
 
               {songModal?.mode === "bulk" ? (
                 <>
                   <Label>Songs (one per line: Title | CDN audio URL)</Label>
                   <TextInput testID="song-bulk" style={[styles.input, { height: 140, textAlignVertical: "top", paddingTop: 10 }]} value={bulkText} onChangeText={setBulkText} placeholder={"Track 1 | https://cdn/1.mp3\nTrack 2 | https://cdn/2.mp3"} placeholderTextColor={C.muted} multiline autoCapitalize="none" />
+                </>
+              ) : songModal?.mode === "multi" ? (
+                <>
+                  <Label>Upload one or more audio files</Label>
+                  <Pressable testID="song-upload-multi" style={styles.pickBtn} onPress={pickAndUploadMulti}>
+                    <Ionicons name="cloud-upload" size={20} color={C.violet} />
+                    <Text style={styles.pickText} numberOfLines={1}>Choose audio files (.mp3) — select multiple</Text>
+                  </Pressable>
+                  {uploadQueue.map((it, idx) => (
+                    <View key={idx} style={styles.qItem}>
+                      <View style={styles.qHead}>
+                        <Ionicons name={it.status === "done" ? "checkmark-circle" : it.status === "error" ? "alert-circle" : "musical-note"} size={14} color={it.status === "done" ? C.emerald : it.status === "error" ? C.red : C.violet} />
+                        <Text style={styles.qName} numberOfLines={1}>{it.name}</Text>
+                        <Text style={styles.qPct}>{it.status === "error" ? "failed" : `${Math.round(it.progress * 100)}%`}</Text>
+                      </View>
+                      <ProgressBar value={it.progress} error={it.status === "error"} />
+                    </View>
+                  ))}
+                  {uploadQueue.length ? <Text style={styles.hlsNote}>{`ℹ️ ${uploadQueue.filter((it) => it.status === "done").length}/${uploadQueue.length} uploaded. Tap "Add Songs" to save them to this album.`}</Text> : null}
                 </>
               ) : (
                 <>
@@ -271,16 +343,43 @@ export default function ContentManager({ onToast }: { onToast: (m: string) => vo
                   <Pressable testID="song-upload" style={styles.pickBtn} onPress={pickAndUpload} disabled={uploading}>
                     {uploading ? <ActivityIndicator color={C.violet} /> : (<><Ionicons name={songForm.source === "upload" ? "checkmark-circle" : "cloud-upload"} size={20} color={songForm.source === "upload" ? C.emerald : C.violet} /><Text style={styles.pickText} numberOfLines={1}>{songForm.fileName || "Upload from computer (.mp3)"}</Text></>)}
                   </Pressable>
+                  {uploading ? (
+                    <View style={{ marginTop: SP.sm }}>
+                      <ProgressBar value={singleProgress} />
+                      <Text style={styles.qPctCenter}>{Math.round(singleProgress * 100)}%</Text>
+                    </View>
+                  ) : null}
                   <Text style={styles.orText}>— or paste a CDN URL (already uploaded) —</Text>
                   <TextInput testID="song-cdn" style={styles.input} value={songForm.source === "cdn" ? songForm.audio_url : ""} onChangeText={(v: string) => setSongForm({ ...songForm, audio_url: v, source: "cdn", fileName: "" })} placeholder="https://cdn.bunny.net/.../song.mp3 or .m3u8" placeholderTextColor={C.muted} autoCapitalize="none" />
                   <Text style={styles.hlsNote}>ℹ️ Uploaded files are queued for HLS encoding automatically. HLS/.m3u8 CDN links are used directly.</Text>
                 </>
               )}
-              <Pressable testID="song-save" style={styles.saveBtn} onPress={saveSong} disabled={saving}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>{songModal?.mode === "bulk" ? "Add Songs" : "Add Song"}</Text>}</Pressable>
+              <Pressable testID="song-save" style={styles.saveBtn} onPress={saveSong} disabled={saving}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Add Songs</Text>}</Pressable>
               <View style={{ height: 24 }} />
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Edit song modal */}
+      <Modal transparent visible={!!songEdit} animationType="fade" onRequestClose={() => setSongEdit(null)}>
+        <View style={styles.centerOverlay}>
+          <View style={styles.tagCard} testID="song-edit-modal">
+            <Text style={styles.sheetTitle}>Edit Song</Text>
+            <Label>Song Name *</Label>
+            <TextInput testID="song-edit-name" style={styles.input} value={songEdit?.title || ""} onChangeText={(v) => setSongEdit((f: any) => ({ ...f, title: v }))} placeholder="Song name" placeholderTextColor={C.muted} />
+            <Label>Status</Label>
+            <View style={styles.wrapRow}>
+              {["active", "inactive"].map((s) => (
+                <Pressable key={s} testID={`song-status-${s}`} style={[styles.pick, songEdit?.status === s && styles.pickActive]} onPress={() => setSongEdit((f: any) => ({ ...f, status: s }))}>
+                  <Text style={[styles.pickText, songEdit?.status === s && { color: "#fff" }]}>{s === "active" ? "Active — Visible" : "Inactive — Hidden"}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable testID="song-edit-save" style={styles.saveBtn} onPress={saveSongEdit} disabled={saving}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Save Changes</Text>}</Pressable>
+            <Pressable style={styles.cancelBtn} onPress={() => setSongEdit(null)}><Text style={styles.cancelText}>Cancel</Text></Pressable>
+          </View>
+        </View>
       </Modal>
 
       {/* Create / Edit Album form */}
@@ -422,6 +521,11 @@ const MenuItem = ({ icon, label, onPress, danger, tid }: any) => (
   </Pressable>
 );
 const Label = ({ children }: any) => <Text style={styles.label}>{children}</Text>;
+const ProgressBar = ({ value, error }: { value: number; error?: boolean }) => (
+  <View style={styles.progressTrack}>
+    <View style={[styles.progressFill, { width: `${Math.min(100, Math.max(0, value * 100))}%`, backgroundColor: error ? C.red : C.violet }]} />
+  </View>
+);
 
 const styles = StyleSheet.create({
   headRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: SP.md },
@@ -453,6 +557,14 @@ const styles = StyleSheet.create({
   modeOn: { backgroundColor: C.violet, borderColor: C.violet },
   modeText: { color: C.sub, fontWeight: "700", fontSize: 13 },
   orText: { color: C.muted, fontSize: 11, textAlign: "center", marginVertical: SP.sm },
+  pickBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.bg, borderRadius: 8, borderWidth: 1, borderColor: C.border, borderStyle: "dashed", paddingHorizontal: SP.md, minHeight: 46, paddingVertical: 10 },
+  qItem: { marginTop: SP.sm },
+  qHead: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  qName: { flex: 1, color: C.text, fontSize: 12, fontWeight: "600" },
+  qPct: { color: C.sub, fontSize: 11, fontWeight: "700" },
+  qPctCenter: { color: C.sub, fontSize: 11, fontWeight: "700", textAlign: "center", marginTop: 4 },
+  progressTrack: { height: 6, borderRadius: 3, backgroundColor: C.border, overflow: "hidden" },
+  progressFill: { height: 6, borderRadius: 3 },
   hlsNote: { color: C.muted, fontSize: 11, marginTop: SP.sm, lineHeight: 15 },
   thumb: { width: 52, height: 52, borderRadius: 8, backgroundColor: C.card },
   rowTitle: { color: C.text, fontSize: 14, fontWeight: "700" },

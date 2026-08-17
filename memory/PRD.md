@@ -154,3 +154,17 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - api.ts: enhanced(period="30d") now passes ?period=
 - backend analytics.py: /enhanced now applies real time-window filter (play_events + transactions by created_at >= now-days) instead of echoing period
 - Verified: all periods return 200; Analytics tab renders LIVE banner + filter chips (screenshot), no crash
+
+## Session 16b — Analytics sub-tabs (Gracefy parity) + Content mgmt song controls
+### Content Management (admin.py + ContentManager.tsx + api.ts)
+- Backend: PUT /api/admin/songs/{id} (edit title/status), PATCH /api/admin/songs/{id}/status (verified via curl 200)
+- api.ts: updateSong, songStatus; uploadAudio now XHR-based with onProgress callback (real upload %)
+- ContentManager: 3 add modes — Single (with progress bar), Upload Files (multi-file, per-file progress bars), Bulk CDN; per-song row now has status badge (active/hidden) + edit (rename+status) + toggle + delete
+### Analytics sub-tabs (app/admin/index.tsx)
+- Analytics landing now has 7 horizontal sub-tabs matching Gracefy: Overview | Users | Revenue | Content | Replays | Devices | Data Usage
+- Users: total/premium/free/premium-rate cards + growth bar chart + premium-vs-free pie (data: /analytics/breakdown)
+- Revenue: gross/platform/payouts/hours cards + revenue-over-time line + top earning artists (/analytics/revenue-overview)
+- Content: album/song counts + top albums (/analytics/breakdown)
+- Replays: most replayed songs list (/analytics/breakdown)
+- Devices: device distribution pie (/analytics/breakdown; currently mostly UNKNOWN until device_type captured)
+- All endpoints verified returning valid data; screenshot confirms 7 sub-tabs render + Users tab operational

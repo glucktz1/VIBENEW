@@ -222,6 +222,36 @@ async def create_song(body: SongIn, admin: dict = Depends(require_admin)):
     return doc
 
 
+class SongUpdate(BaseModel):
+    title: Optional[str] = None
+    audio_url: Optional[str] = None
+    status: Optional[str] = None
+
+
+@router.put("/songs/{song_id}")
+async def update_song(song_id: str, body: SongUpdate, admin: dict = Depends(require_admin)):
+    update = {k: v for k, v in body.dict().items() if v is not None}
+    if not update:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    if "status" in update and update["status"] not in ("active", "inactive"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+    res = await db.songs.update_one({"song_id": song_id}, {"$set": update})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Song not found")
+    return {"ok": True, **update}
+
+
+@router.patch("/songs/{song_id}/status")
+async def song_status(song_id: str, body: dict, admin: dict = Depends(require_admin)):
+    status = body.get("status")
+    if status not in ("active", "inactive"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+    res = await db.songs.update_one({"song_id": song_id}, {"$set": {"status": status}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Song not found")
+    return {"ok": True, "status": status}
+
+
 @router.delete("/songs/{song_id}")
 async def delete_song(song_id: str, admin: dict = Depends(require_admin)):
     song = await db.songs.find_one({"song_id": song_id})

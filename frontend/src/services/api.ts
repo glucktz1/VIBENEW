@@ -98,6 +98,8 @@ export const adminApi = {
   addAlbumSong: (id: string, b: any) => api.post<any>(`/admin/albums/${id}/songs`, b),
   addAlbumSongsBulk: (id: string, songs: any[]) => api.post<any>(`/admin/albums/${id}/songs/bulk`, { songs }),
   deleteSong: (id: string) => api.del(`/admin/songs/${id}`),
+  updateSong: (id: string, b: any) => api.put<any>(`/admin/songs/${id}`, b),
+  songStatus: (id: string, status: string) => api.patch<any>(`/admin/songs/${id}/status`, { status }),
   categories: () => api.get<any[]>("/admin/categories"),
   createCategory: (b: any) => api.post<any>("/admin/categories", b),
   deleteCategory: (id: string) => api.del(`/admin/categories/${id}`),
@@ -113,7 +115,7 @@ export const adminApi = {
   revenueOverview: () => api.get<any>("/analytics/revenue-overview"),
   transactions: (status = "all", q = "") => api.get<any>(`/analytics/transactions?status=${status}&q=${encodeURIComponent(q)}`),
   locationOverview: () => api.get<any>("/analytics/location-overview"),
-  uploadAudio: async (uri: string, name: string, type: string): Promise<{ path: string; media_url: string }> => {
+  uploadAudio: async (uri: string, name: string, type: string, onProgress?: (p: number) => void): Promise<{ path: string; media_url: string }> => {
     const token = await storage.secureGet<string>(TOKEN_KEY, "");
     const form = new FormData();
     if (Platform.OS === "web") {
@@ -122,16 +124,24 @@ export const adminApi = {
     } else {
       form.append("file", { uri, name, type } as any);
     }
-    const res = await fetch(`${BASE}/api/admin/upload-audio`, {
-      method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      body: form,
+    return await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${BASE}/api/admin/upload-audio`);
+      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      if (xhr.upload) {
+        xhr.upload.onprogress = (e: any) => {
+          if (onProgress && e.lengthComputable) onProgress(e.loaded / e.total);
+        };
+      }
+      xhr.onload = () => {
+        let data: any = null;
+        try { data = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch { data = xhr.responseText; }
+        if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+        else reject(new Error((data && data.detail) || `Upload failed (${xhr.status})`));
+      };
+      xhr.onerror = () => reject(new Error("Upload failed — check your connection"));
+      xhr.send(form);
     });
-    const text = await res.text();
-    let data: any = null;
-    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-    if (!res.ok) throw new Error((data && data.detail) || `Upload failed (${res.status})`);
-    return data;
   },
   dataUsage: (days = 30) => api.get<any>(`/analytics/data-usage?days=${days}`),
   breakdown: () => api.get<any>("/analytics/breakdown"),
