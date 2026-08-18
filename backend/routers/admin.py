@@ -290,6 +290,35 @@ async def create_category(body: CategoryIn, admin: dict = Depends(require_admin)
     return doc
 
 
+DEFAULT_GENRES = [
+    ("Bongo Hits", "#f59e0b"),
+    ("Gospel", "#8b5cf6"),
+    ("R&B", "#ec4899"),
+    ("Amapiano", "#10b981"),
+    ("Taarabu", "#3b82f6"),
+]
+
+
+@router.post("/categories/seed-genres")
+async def seed_genre_categories(admin: dict = Depends(require_admin)):
+    """Create any missing default genre categories (idempotent). Existing ones are kept."""
+    created = []
+    for name, color in DEFAULT_GENRES:
+        existing = await db.categories.find_one({"name": {"$regex": f"^{name}$", "$options": "i"}})
+        if existing:
+            continue
+        doc = {
+            "category_id": f"cat_{uuid.uuid4().hex[:8]}",
+            "name": name,
+            "color": color,
+            "created_at": now_utc(),
+        }
+        await db.categories.insert_one(dict(doc))
+        created.append(name)
+    return {"ok": True, "created": created}
+
+
+
 @router.delete("/categories/{category_id}")
 async def delete_category(category_id: str, admin: dict = Depends(require_admin)):
     await db.categories.delete_one({"category_id": category_id})
@@ -1013,7 +1042,8 @@ async def get_home_genres(admin: dict = Depends(require_admin)):
     cfg = await db.app_config.find_one({"key": "home_genres"}, {"_id": 0})
     selected = (cfg or {}).get("value")
     if not selected:
-        selected = _default_pill_ids(cats)
+        # default: all categories enabled as pills
+        selected = [c["category_id"] for c in cats]
     return {"categories": cats, "selected": selected}
 
 

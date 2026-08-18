@@ -34,13 +34,8 @@ async def home_genres():
     ids = (cfg or {}).get("value")
     if ids:
         return [by_id[i] for i in ids if i in by_id]
-    # default set (match by name, case-insensitive)
-    result = []
-    for name in _DEFAULT_PILL_NAMES:
-        for c in cats:
-            if (c.get("name") or "").strip().lower() == name.lower():
-                result.append(c); break
-    return result or cats
+    # No admin config yet => show ALL categories as pills.
+    return cats
 
 
 @router.get("/song-categories")

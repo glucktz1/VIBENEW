@@ -52,6 +52,16 @@ export default function LayoutManager({ onToast }: { onToast: (m: string) => voi
     } catch (e: any) { onToast(e.message); } finally { setSavingGenres(false); }
   };
 
+  const [seeding, setSeeding] = useState(false);
+  const seed = async () => {
+    setSeeding(true);
+    try {
+      const res = await adminApi.seedGenres();
+      onToast(res.created?.length ? `Added: ${res.created.join(", ")}` : "All default genres already exist");
+      await load();
+    } catch (e: any) { onToast(e.message); } finally { setSeeding(false); }
+  };
+
   if (loading) return <ActivityIndicator color={C.violet} style={{ marginTop: SP.xl }} />;
 
   const enabledGenreCount = genres.filter((g) => g.enabled).length;
@@ -81,6 +91,9 @@ export default function LayoutManager({ onToast }: { onToast: (m: string) => voi
 
       <Text style={styles.title}>Filter Pills (Genres)</Text>
       <Text style={styles.sub}>Choose which categories appear as filter pills below Quick Access on Home. Order them with the arrows. {enabledGenreCount} shown.</Text>
+      <Pressable testID="seed-genres" style={styles.seedBtn} onPress={seed} disabled={seeding}>
+        {seeding ? <ActivityIndicator color={C.violet} /> : <><Ionicons name="add-circle" size={16} color={C.violet} /><Text style={styles.seedTxt}>Add default genres (Bongo Hits, Gospel, R&B, Amapiano, Taarabu)</Text></>}
+      </Pressable>
       {genres.length === 0 ? <Text style={styles.empty}>No categories yet. Add some under Contents → Categories.</Text> : null}
       {genres.map((g, i) => (
         <View key={g.id} style={[styles.row, !g.enabled && styles.rowOff]}>
@@ -115,4 +128,6 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: C.border, marginVertical: SP.lg },
   saveBtn: { backgroundColor: C.violet, borderRadius: 9999, height: 48, alignItems: "center", justifyContent: "center", marginTop: SP.md },
   saveTxt: { color: "#fff", fontWeight: "800", fontSize: 15 },
+  seedBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: C.violet + "22", borderWidth: 1, borderColor: C.violet, borderRadius: 10, minHeight: 44, paddingHorizontal: SP.md, paddingVertical: SP.sm, marginBottom: SP.sm },
+  seedTxt: { color: C.violet, fontWeight: "800", fontSize: 12, flexShrink: 1 },
 });

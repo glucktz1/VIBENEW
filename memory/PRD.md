@@ -384,3 +384,12 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
   - free-hours metering tick gated with `&& !isPremiumRef.current`; playTrack free-hours block gated with `&& !isPremiumRef.current`.
 - Points 1 (filter pills) & 2 (billing dot gray/green + no pay prompt when off) were ALREADY fixed in preview (Sessions 21/23); user's native app is a stale build → needs redeploy + rebuild.
 - Verified preview: billing OFF, logged-in free user → plays, ringtone banner, no Nenda Premium modal; pills = Bongo Hits/Gospel/R&B/Amapiano/Taarabu.
+
+## Session 26 — Seed default genres + pills default to ALL categories
+- User wants gospel categories kept PLUS Bongo Hits, Gospel, R&B, Amapiano, Taarabu, showing all as pills. Root cause of "pills not fixed": production DB has its own categories (Ibada, Sifa, Injili, Kwaya); the requested genres don't exist there.
+- Backend admin.py: POST /admin/categories/seed-genres — idempotently creates missing DEFAULT_GENRES [Bongo Hits, Gospel, R&B, Amapiano, Taarabu] (keeps existing). get_home_genres default selected = ALL category ids.
+- music.py: /home-genres default (no config) now returns ALL categories (was just the 5 by name).
+- Frontend LayoutManager: added "Add default genres" button (adminApi.seedGenres) in Filter Pills section; reloads list after.
+- api.ts: adminApi.seedGenres.
+- Verified: seed idempotent (created:[] when present), button renders with genre toggles, pills return correctly.
+- PRODUCTION STEPS for user: redeploy → prod admin → Layout Management → Filter Pills → "Add default genres" (creates them in prod) → assign albums to new categories in Contents → they appear as pills (default shows all).

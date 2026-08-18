@@ -128,6 +128,7 @@ export const adminApi = {
   deleteCategory: (id: string) => api.del(`/admin/categories/${id}`),
   homeGenres: () => api.get<any>("/admin/home-genres"),
   setHomeGenres: (category_ids: string[]) => api.put<any>("/admin/home-genres", { category_ids }),
+  seedGenres: () => api.post<any>("/admin/categories/seed-genres", {}),
   playsAnalytics: () => api.get<any>("/admin/analytics/plays"),
   // Gracefy dashboard analytics
   overview: () => api.get<any>("/analytics/overview"),
