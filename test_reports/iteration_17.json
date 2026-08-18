@@ -1,0 +1,34 @@
+{
+  "summary": "Billing master-switch end-to-end verified across backend and frontend. Backend PUT /api/admin/settings <-> GET /api/billing-status round trip works for both true and false, and /billing-status exposes billing_enabled + premium_for_all. Frontend behavior confirmed with u1@test.com: when billing is OFF the Profile dot is GRAY (rgb(107,140,174) = textMuted), a gold PREMIUM badge is shown, the 'Nenda Premium' upgrade button is hidden, and the mini/full player show the RINGTONE prompt ('Weka Wimbo huu muito wa simu yangu') with no Changia / Nenda Premium / subscribe modal. When billing is toggled ON via admin API, focusing the Wasifu tab refreshes state and the Profile dot turns GREEN (rgb(46,213,115) = success), the 'Nenda Premium' upgrade card reappears, and the PREMIUM badge disappears — proving useFocusEffect + AppState refresh works without a reload. Toggle-back to OFF also refreshes correctly on tab focus. Billing left OFF at end (user's current desired state). No bugs found; the previously-reported sync issue is fixed.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_billing_toggle.py",
+    "/app/test_reports/pytest/billing_toggle.xml"
+  ],
+  "action_items": [
+    "(Optional / low priority) Consider adding testID to tab-bar buttons in app/(tabs)/_layout.tsx (e.g. tabBarButtonTestID or a custom tabBarButton) — currently tabs must be selected by role name which is brittle for automation.",
+    "(Optional) Backend /api/billing-status returns 401s in some browser sessions before login-token attaches (visible as CONSOLE 401 warnings on cold load). Public endpoint call is fine functionally but the client may be sending stale token; verify billingApi.status() does not require Authorization."
+  ],
+  "critical_code_review_comments": [
+    "routers/billing.py:37-42 uses correct fallback ordering (settings.billing_enabled -> app_config.billing -> default true). Good single-source-of-truth.",
+    "AuthContext.tsx computes effectivePremium = isPremium || !billingEnabled || premiumForAll and refreshes on mount + AppState active — correct.",
+    "PlayerContext.tsx stopForFreeHours guards with isPremiumRef (which now mirrors effectivePremium) so billing OFF prevents free-hour stops — correct.",
+    "PlayerPromptBanner returns ringtone prompt when effectivePremium or isNew, and never returns contribute when billing is off — correct.",
+    "profile.tsx correctly gates upgrade behind !isGuest && !effectivePremium && billingEnabled and calls refreshBilling() inside useFocusEffect — correct."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_billing_toggle.py (new pytest suite for billing round-trip)"
+  ],
+  "success_rate": { "backend": "100% (5/5 pytest)", "frontend": "100% on all 6 requested checks" },
+  "seed_data_creation": "None. Used existing admin@vibe.app and u1@test.com credentials.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Billing left OFF. Admin login: admin@vibe.app / Vibe@2026. Free user: u1@test.com / pass123. Tab bar buttons have no testID; use page.get_by_role('tab', name='  <Title>') (note the leading spaces come from icon+label a11y string). Profile has testIDs billing-indicator, profile-upgrade, profile-login. Banners: ringtone-banner-full/mini, changia-banner-full/mini. Mini-player testIDs: mini-player, mini-open, mini-play-toggle.",
+  "rca_of_issue": "Root cause was previously fixed: /billing-status now reads settings.billing_enabled (same key admin PUTs to). Foreground/focus refresh added in AuthContext (AppState 'active') and profile.tsx (useFocusEffect -> refreshBilling). PlayerContext also refetches billing on AppState 'active' and gates stopForFreeHours behind isPremiumRef which mirrors effectivePremium. All flows verified end-to-end via API round trip and UI observation."
+}

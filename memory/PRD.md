@@ -393,3 +393,8 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - api.ts: adminApi.seedGenres.
 - Verified: seed idempotent (created:[] when present), button renders with genre toggles, pills return correctly.
 - PRODUCTION STEPS for user: redeploy → prod admin → Layout Management → Filter Pills → "Add default genres" (creates them in prod) → assign albums to new categories in Contents → they appear as pills (default shows all).
+
+## Session 27 — Billing sync hardening (native reads toggle correctly) — TESTED
+- PlayerContext now also refetches billing on AppState 'active' (AuthContext already did on mount+foreground+profile-focus), so both contexts stay in sync with the admin toggle without a restart.
+- billing-status remains the single source of truth from settings.billing_enabled.
+- testing_agent verified (both): backend PUT /admin/settings ↔ GET /billing-status round-trip (5/5 pytest); frontend billing OFF → GRAY dot + PREMIUM badge + no upgrade + ringtone banner + no subscribe modal; billing ON → GREEN dot + upgrade returns; toggling reflects via useFocusEffect/AppState without reload. Left billing OFF (user's desired state). No bugs.

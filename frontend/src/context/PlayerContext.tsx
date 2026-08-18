@@ -204,7 +204,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   // When the app is backgrounded (screen lock, home), pause playback and prompt.
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") return;
+      if (state === "active") {
+        // Re-sync billing config so admin toggles reflect without a restart.
+        billingApi.status().then((b) => setBilling(b)).catch(() => {});
+        return;
+      }
       const p = playerRef.current;
       const live = currentRef.current?.isLive;
       if (p && !isPremiumRef.current && billing.billing_enabled && Platform.OS !== "web" && !live) {
