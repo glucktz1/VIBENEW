@@ -55,6 +55,7 @@ export const musicApi = {
   album: (id: string) => api.get<any>(`/albums/${id}`),
   songs: (params = "") => api.get<any[]>(`/songs${params}`),
   categories: () => api.get<any[]>("/categories"),
+  homeGenres: () => api.get<any[]>("/home-genres"),
   search: (q: string) => api.get<any>(`/search?q=${encodeURIComponent(q)}`),
   trackPlay: (id: string) => api.post(`/songs/${id}/play`),
   nextRecs: (songId: string) => api.get<any>(`/recommendations/next?song_id=${songId}`),
@@ -125,6 +126,8 @@ export const adminApi = {
   categories: () => api.get<any[]>("/admin/categories"),
   createCategory: (b: any) => api.post<any>("/admin/categories", b),
   deleteCategory: (id: string) => api.del(`/admin/categories/${id}`),
+  homeGenres: () => api.get<any>("/admin/home-genres"),
+  setHomeGenres: (category_ids: string[]) => api.put<any>("/admin/home-genres", { category_ids }),
   playsAnalytics: () => api.get<any>("/admin/analytics/plays"),
   // Gracefy dashboard analytics
   overview: () => api.get<any>("/analytics/overview"),

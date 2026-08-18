@@ -46,7 +46,7 @@ export default function Home() {
     load();
   }, [load]);
 
-  useEffect(() => { musicApi.categories().then((c) => setGenres(c || [])).catch(() => {}); }, []);
+  useEffect(() => { musicApi.homeGenres().then((c) => setGenres(c || [])).catch(() => {}); }, []);
 
   useEffect(() => {
     if (genre === "all") return;

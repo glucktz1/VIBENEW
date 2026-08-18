@@ -992,3 +992,33 @@ async def set_home_layout(body: dict, admin: dict = Depends(require_admin)):
     rows = body.get("rows") or []
     await db.app_config.update_one({"key": "home_layout"}, {"$set": {"key": "home_layout", "value": rows}}, upsert=True)
     return {"ok": True, "rows": rows}
+
+
+
+DEFAULT_PILL_NAMES = ["Bongo Hits", "Gospel", "R&B", "Amapiano", "Taarabu"]
+
+
+def _default_pill_ids(cats: list) -> list:
+    ids = []
+    for name in DEFAULT_PILL_NAMES:
+        for c in cats:
+            if (c.get("name") or "").strip().lower() == name.lower() and c["category_id"] not in ids:
+                ids.append(c["category_id"]); break
+    return ids
+
+
+@router.get("/home-genres")
+async def get_home_genres(admin: dict = Depends(require_admin)):
+    cats = await db.categories.find({"status": {"$ne": "inactive"}}, {"_id": 0}).sort("sort_order", 1).to_list(200)
+    cfg = await db.app_config.find_one({"key": "home_genres"}, {"_id": 0})
+    selected = (cfg or {}).get("value")
+    if not selected:
+        selected = _default_pill_ids(cats)
+    return {"categories": cats, "selected": selected}
+
+
+@router.put("/home-genres")
+async def set_home_genres(body: dict, admin: dict = Depends(require_admin)):
+    ids = body.get("category_ids") or []
+    await db.app_config.update_one({"key": "home_genres"}, {"$set": {"key": "home_genres", "value": ids}}, upsert=True)
+    return {"ok": True, "category_ids": ids}

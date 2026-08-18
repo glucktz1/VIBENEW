@@ -356,3 +356,14 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - api.ts: billingApi.publicSettings; adminApi.translationsAdmin/setTranslations.
 - Verified via screenshots: Profile new rows (sw), toggle→English translates Profile+Home ("Good morning","Popular in Tanzania","896 plays"), Privacy screen loads admin URL in iframe, admin Language section (JSON editor + upload + Save, active langs en/sw).
 - NOTE: set sample terms/privacy URLs in preview for testing (Google/GNU) — user should set their own in Admin→Settings→Legal. Translation scope = key screens per user; other screens (library, search, bible, etc.) still Swahili and can be expanded by adding keys or uploading a JSON.
+
+## Session 23 — Home filter pills managed via Layout Manager (linked to categories)
+- Default Home filter pills changed to: Bongo Hits, Gospel, R&B, Amapiano, Taarabu (in order).
+- Backend:
+  - admin.py: GET /admin/home-genres (returns all categories + selected ids; defaults to the 5 by name), PUT /admin/home-genres ({category_ids}) → app_config key "home_genres". DEFAULT_PILL_NAMES + _default_pill_ids helper.
+  - music.py: public GET /home-genres → ordered category objects from config, else the 5 defaults by name (case-insensitive), else all.
+- Frontend:
+  - api.ts: musicApi.homeGenres, adminApi.homeGenres/setHomeGenres.
+  - (tabs)/index.tsx: pills now load from musicApi.homeGenres() (was categories()). Selecting a pill still filters via musicApi.albums(?category_id=) (already linked to categories).
+  - LayoutManager.tsx: added a "Filter Pills (Genres)" section — lists all categories with include toggle + up/down ordering; "Save Filter Pills" → setHomeGenres(enabled ids in order). Existing Home Rows section unchanged with its own "Save Layout".
+- Verified: public /home-genres default = [Bongo Hits, Gospel, R&B, Amapiano, Taarabu]; Home shows Zote + those 5; admin save round-trip (custom subset reflects on public, then restored); Layout Manager shows both sections.

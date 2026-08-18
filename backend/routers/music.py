@@ -22,6 +22,27 @@ async def list_categories():
     return cats
 
 
+_DEFAULT_PILL_NAMES = ["Bongo Hits", "Gospel", "R&B", "Amapiano", "Taarabu"]
+
+
+@router.get("/home-genres")
+async def home_genres():
+    """Ordered genre filter pills for the app Home (admin-configurable via Layout Manager)."""
+    cats = await db.categories.find({"status": {"$ne": "inactive"}}, {"_id": 0}).sort("sort_order", 1).to_list(200)
+    by_id = {c["category_id"]: c for c in cats}
+    cfg = await db.app_config.find_one({"key": "home_genres"}, {"_id": 0})
+    ids = (cfg or {}).get("value")
+    if ids:
+        return [by_id[i] for i in ids if i in by_id]
+    # default set (match by name, case-insensitive)
+    result = []
+    for name in _DEFAULT_PILL_NAMES:
+        for c in cats:
+            if (c.get("name") or "").strip().lower() == name.lower():
+                result.append(c); break
+    return result or cats
+
+
 @router.get("/song-categories")
 async def list_song_categories():
     cats = await db.song_categories.find({"status": "active"}, {"_id": 0}).sort("sort_order", 1).to_list(200)
