@@ -26,6 +26,10 @@ export default function Home() {
   const [sections, setSections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [genres, setGenres] = useState<any[]>([]);
+  const [genre, setGenre] = useState("all");
+  const [genreAlbums, setGenreAlbums] = useState<any[]>([]);
+  const [genreLoading, setGenreLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -39,6 +43,17 @@ export default function Home() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => { musicApi.categories().then((c) => setGenres(c || [])).catch(() => {}); }, []);
+
+  useEffect(() => {
+    if (genre === "all") return;
+    setGenreLoading(true);
+    musicApi.albums(`?category_id=${genre}`)
+      .then((a) => setGenreAlbums(a || []))
+      .catch(() => setGenreAlbums([]))
+      .finally(() => setGenreLoading(false));
+  }, [genre]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -102,6 +117,35 @@ export default function Home() {
             ))}
           </View>
 
+          {/* Genre filter pills */}
+          {genres.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillsRow} contentContainerStyle={styles.pillsContent}>
+              <Pressable testID="genre-all" style={[styles.pill, genre === "all" && styles.pillOn]} onPress={() => setGenre("all")}>
+                <Text style={[styles.pillText, genre === "all" && styles.pillTextOn]}>Zote</Text>
+              </Pressable>
+              {genres.map((g) => (
+                <Pressable key={g.category_id} testID={`genre-${g.category_id}`} style={[styles.pill, genre === g.category_id && styles.pillOn]} onPress={() => setGenre(g.category_id)}>
+                  <Text style={[styles.pillText, genre === g.category_id && styles.pillTextOn]}>{g.name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
+
+          {/* Genre grid (when a genre is selected) */}
+          {genre !== "all" ? (
+            genreLoading ? (
+              <ActivityIndicator color={COLORS.primary} style={{ marginTop: SPACING.xl }} />
+            ) : genreAlbums.length === 0 ? (
+              <Text style={styles.genreEmpty}>Hakuna albamu kwenye aina hii bado.</Text>
+            ) : (
+              <View style={styles.genreGrid}>
+                {genreAlbums.map((a) => (
+                  <View key={a.album_id} style={styles.genreItem}><AlbumCard album={a} full /></View>
+                ))}
+              </View>
+            )
+          ) : (
+          <>
           {/* Sections */}
           {sections.map((section) => (
             <View key={section.id} style={styles.section}>
@@ -206,6 +250,8 @@ export default function Home() {
               )}
             </View>
           ))}
+          </>
+          )}
 
           <View style={{ height: 140 }} />
         </ScrollView>
@@ -228,7 +274,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.border,
   },
   bannerText: { flex: 1, color: COLORS.text, fontSize: FONT.md, fontWeight: "600", marginLeft: SPACING.sm },
-  quickGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginBottom: SPACING.lg },
+  quickGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginBottom: SPACING.md },
   quickTile: {
     width: "48.5%", flexDirection: "row", alignItems: "center", backgroundColor: COLORS.card,
     borderRadius: RADIUS.md, marginBottom: SPACING.sm, overflow: "hidden", height: 56,
@@ -236,6 +282,15 @@ const styles = StyleSheet.create({
   quickIcon: { width: 56, height: 56, alignItems: "center", justifyContent: "center" },
   quickLabel: { color: COLORS.text, fontSize: 13, fontWeight: "700", marginLeft: SPACING.sm, marginRight: SPACING.xs, flex: 1 },
   section: { marginBottom: SPACING.lg },
+  pillsRow: { marginBottom: SPACING.lg },
+  pillsContent: { gap: SPACING.sm, paddingRight: SPACING.md },
+  pill: { paddingHorizontal: SPACING.md, height: 34, borderRadius: RADIUS.full, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center" },
+  pillOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  pillText: { color: COLORS.textSecondary, fontSize: FONT.sm, fontWeight: "700" },
+  pillTextOn: { color: "#fff" },
+  genreGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+  genreItem: { width: "48%", marginBottom: SPACING.md },
+  genreEmpty: { color: COLORS.textMuted, textAlign: "center", marginTop: SPACING.xl, fontSize: FONT.sm },
   artistCard: { width: 96, marginRight: SPACING.md, alignItems: "center" },
   artistArt: { width: 88, height: 88, borderRadius: 44, backgroundColor: COLORS.surface },
   artistFallback: { alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primary },

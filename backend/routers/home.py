@@ -133,13 +133,25 @@ async def home_feed(user: Optional[dict] = Depends(get_optional_user)):
     if pow_albums:
         sections.append({"id": "pick_week", "title": "Pick of the Week", "type": "pick_week", "items": pow_albums})
 
+    # Country favourites (e.g. "Maarufu Tanzania") — top-played albums for the user's country
+    country = (user.get("country") if user else None) or "Tanzania"
+    cfav = await db.albums.find(
+        {"status": "active", "$or": [{"countries": country}, {"countries": "Global"}]}, {"_id": 0}
+    ).sort("total_plays", -1).limit(8).to_list(8)
+    if not cfav:
+        cfav = await db.albums.find({"status": "active"}, {"_id": 0}).sort("total_plays", -1).limit(8).to_list(8)
+    for a in cfav:
+        a["songs_count"] = await db.songs.count_documents({"album_id": a["album_id"], "status": "active"})
+    if cfav:
+        sections.append({"id": "country_fav", "title": f"Maarufu {country}", "type": "albums", "items": cfav})
+
     recent_albums = await db.albums.find({"status": "active"}, {"_id": 0}).sort("created_at", -1).limit(8).to_list(8)
     for a in recent_albums:
         a["songs_count"] = await db.songs.count_documents({"album_id": a["album_id"], "status": "active"})
     if recent_albums:
         sections.append({"id": "recently_added", "title": "Recently Added", "type": "recently", "items": recent_albums})
 
-    # Apply admin Layout Manager config (order + enable/disable)
+    # Apply admin Layout Manager config (order + enable/disable); otherwise use default order
     cfg = await db.app_config.find_one({"key": "home_layout"}, {"_id": 0})
     layout = (cfg or {}).get("value") or []
     if layout:
@@ -147,6 +159,11 @@ async def home_feed(user: Optional[dict] = Depends(get_optional_user)):
         disabled = {row["id"] for row in layout if not row.get("enabled", True)}
         sections = [s for s in sections if s["id"] not in disabled]
         sections.sort(key=lambda s: order_map.get(s["id"], 999))
+    else:
+        # Default order: Pick of the Week, Country favourites, Made for You, then the rest.
+        default_order = ["pick_week", "country_fav", "recommended", "recently_added", "recent", "artists", "trending", "new"]
+        idx = {rid: i for i, rid in enumerate(default_order)}
+        sections.sort(key=lambda s: idx.get(s["id"], 100))
 
     return {"sections": sections, "greeting_name": user.get("name") if user else None}
 

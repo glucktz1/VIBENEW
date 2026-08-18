@@ -18,7 +18,7 @@ async def _attach_songs_count(albums: list) -> list:
 
 @router.get("/categories")
 async def list_categories():
-    cats = await db.categories.find({"status": "active"}, {"_id": 0}).sort("sort_order", 1).to_list(200)
+    cats = await db.categories.find({"status": {"$ne": "inactive"}}, {"_id": 0}).sort("sort_order", 1).to_list(200)
     return cats
 
 

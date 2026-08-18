@@ -968,8 +968,9 @@ async def admin_upload_audio(file: UploadFile = File(...), admin: dict = Depends
 
 
 HOME_ROWS = [
-    {"id": "recommended", "title": "Made for You"},
     {"id": "pick_week", "title": "Pick of the Week"},
+    {"id": "country_fav", "title": "Maarufu (Country)"},
+    {"id": "recommended", "title": "Made for You"},
     {"id": "recently_added", "title": "Recently Added"},
     {"id": "artists", "title": "Wasanii Maarufu"},
     {"id": "trending", "title": "Trending Now"},

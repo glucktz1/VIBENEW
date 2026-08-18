@@ -321,3 +321,14 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - scripts/populate_phones.py: one-time — gave ~85% of existing customers TZ phone numbers (+2557XXXXXXXX) so SMS preview is demonstrable.
 - Verified: backend curl (all/inactive_7/30/90/active_7 splits add up; listened=1/not_listened=53 add up; create sent 44; list/delete) + desktop screenshots (modal, filters, live 44-user list, send→SENT, stats). Test campaigns cleaned up.
 - STILL SIMULATED: real SMS gateway (Beem/Twilio/Africa's Talking) not wired — user chose to simulate for now.
+
+## Session 20 — Genre pills, Home row reorder + country row, banner diagnosis
+- Home row order (default, no Layout Manager config): Pick of the Week → Maarufu {Country} → Made for You → Recently Added → Jump Back In → Artists → Trending → New. Rest managed via Layout Manager.
+  - home.py: added "country_fav" section (top total_plays albums where countries includes user's country or Global; title "Maarufu {country}", default Tanzania). Added default_order sort when no layout config (else-branch).
+  - admin.py HOME_ROWS reordered + added country_fav so Layout Manager exposes it.
+  - NOTE: deleted stale home_layout config in PREVIEW db so default applies; PRODUCTION has no config so new default shows automatically. If a user customises via Layout Manager, that wins.
+- Genre filter pills (native+web) below Quick Access on Home:
+  - (tabs)/index.tsx: fetch musicApi.categories(); horizontal pills ("Zote" + genres). Selecting a genre replaces section rows with a 2-col AlbumCard grid via musicApi.albums(?category_id=). "Zote" restores normal rows.
+  - FIX: GET /categories filtered status:"active" but seeded categories have no status → returned 0. Changed to {"status": {"$ne": "inactive"}} so all genres show.
+- Contribution/Ringtone banner "not on native": ROOT CAUSE = stale production build, NOT a code bug. usePlayerPrompt guarantees a banner for any logged-in (non-guest) user; verified on preview it renders on the mini player for logged-in free user (u1@test.com). Code is platform-identical (no .web/.native variants, no Platform guards hiding it). Fix = user must REDEPLOY + regenerate Android build to pick up current code. (If it still fails on a fresh native build, deeper native debug needed.)
+- Verified via screenshots: pills + new order + genre grid (Gospel) + mini-player banner.
