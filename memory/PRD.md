@@ -343,3 +343,16 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - plans.tsx: when billing OFF, hides plan cards/checkout and shows "Kila kitu ni bure kwa sasa!" active state; uses effectivePremium.
 - Verified via screenshots: billing OFF (gray dot, PREMIUM, no upgrade) and billing ON (green dot, upgrade CTA); curl confirmed /billing-status now flips with admin PUT /admin/settings {billing_enabled}.
 - NOTE: consumer app reflects toggle on next load or profile-tab focus (refreshBilling). Left billing ON in preview after testing.
+
+## Session 22 — Profile rows revamp + i18n (Swahili⇄English) + admin translation upload
+- Profile page (native+web): replaced Makanisa→Privacy Notice, Neno la Leo→Terms & Conditions; removed Radio; added a Language toggle row (modal picker of available languages, persists to storage).
+- Privacy/Terms: new screens app/legal/privacy.tsx & app/legal/terms.tsx (share src/components/LegalScreen.tsx). Pull terms_url/privacy_url from GET /api/public-settings; render URL via react-native-webview (native) / <iframe> (web); fallback "not set yet" placeholder.
+- i18n system:
+  - src/i18n/translations.ts: DEFAULT_TRANSLATIONS (sw, en) covering Profile, Home labels, Player, Plans + sectionTitleKey() map for Home section ids.
+  - src/context/LanguageContext.tsx: lang/setLang/t()/languages/sectionTitle(); loads persisted lang; fetches GET /api/translations and MERGES admin overrides over built-ins. Wrapped in app/_layout.tsx (inside AuthProvider, outside PlayerProvider).
+  - Translated screens: Profile (full), Home ((tabs)/index.tsx — greeting, quick tiles, guest banner, All pill, section titles incl. country_fav "Popular in {country}", plays/albums/songs suffixes, empty genre), Plans (title/sub/perks/active/freeNow/popular/perDay), Player (nothingPlaying/back/playingFrom/radio/previewNote).
+- Admin translation upload: src/components/admin/TranslationsManager.tsx — added as "Language" sub-tab in SettingsManager + sidebar item (sub:"language"). Upload .json via expo-document-picker (web: fetch(uri).text(); native: FileSystem.readAsStringAsync) OR paste JSON; validates + saves via PUT /api/admin/translations → app_config key "translations". Shows active languages.
+- Backend: billing.py added public GET /translations and GET /public-settings (branding+legal). settings.py added admin GET/PUT /translations (app_config "translations").
+- api.ts: billingApi.publicSettings; adminApi.translationsAdmin/setTranslations.
+- Verified via screenshots: Profile new rows (sw), toggle→English translates Profile+Home ("Good morning","Popular in Tanzania","896 plays"), Privacy screen loads admin URL in iframe, admin Language section (JSON editor + upload + Save, active langs en/sw).
+- NOTE: set sample terms/privacy URLs in preview for testing (Google/GNU) — user should set their own in Admin→Settings→Legal. Translation scope = key screens per user; other screens (library, search, bible, etc.) still Swahili and can be expanded by adding keys or uploading a JSON.

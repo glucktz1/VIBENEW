@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Switch, TextInput, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { adminApi } from "@/src/services/api";
+import TranslationsManager from "./TranslationsManager";
 import { C, SP } from "./adminTheme";
 
 type Field =
@@ -106,8 +107,16 @@ export default function SettingsManager({ onToast, initial = "system" }: { onToa
             <Text style={[styles.subTabText, view === s.key && { color: "#fff" }]}>{s.label}</Text>
           </Pressable>
         ))}
+        <Pressable testID="set-tab-language" style={[styles.subTab, view === "language" && styles.subTabOn]} onPress={() => setView("language")}>
+          <Ionicons name="language" size={14} color={view === "language" ? "#fff" : C.sub} />
+          <Text style={[styles.subTabText, view === "language" && { color: "#fff" }]}>Language</Text>
+        </Pressable>
       </ScrollView>
 
+      {view === "language" ? (
+        <TranslationsManager onToast={onToast} />
+      ) : (
+      <>
       <Text style={styles.section}>{section.label}</Text>
       <Text style={styles.sectionDesc}>{section.desc}</Text>
 
@@ -166,6 +175,8 @@ export default function SettingsManager({ onToast, initial = "system" }: { onToa
         </View>
       ) : null}
       <View style={{ height: 40 }} />
+      </>
+      )}
     </View>
   );
 }

@@ -58,6 +58,25 @@ async def subscription_plans():
     return plans
 
 
+@router.get("/translations")
+async def public_translations():
+    doc = await db.app_config.find_one({"key": "translations"}, {"_id": 0})
+    return (doc or {}).get("value", {})
+
+
+@router.get("/public-settings")
+async def public_settings():
+    s = await db.settings.find_one({"key": "app"}, {"_id": 0}) or {}
+    return {
+        "app_name": s.get("app_name", "Vibe"),
+        "brand_primary_color": s.get("brand_primary_color", "#00A8E8"),
+        "support_email": s.get("support_email", ""),
+        "company_name": s.get("company_name", "Vibe Music"),
+        "terms_url": s.get("terms_url", ""),
+        "privacy_url": s.get("privacy_url", ""),
+    }
+
+
 @router.post("/payment/azampay/initiate")
 async def initiate_payment(body: SubscribeIn, user: dict = Depends(get_current_user)):
     """Simulated mobile-money payment: returns success immediately and activates plan."""

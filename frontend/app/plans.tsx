@@ -6,12 +6,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { billingApi } from "@/src/services/api";
 import { useAuth } from "@/src/context/AuthContext";
+import { useLang } from "@/src/context/LanguageContext";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
-
-const PERKS = ["Sikiliza bila kikomo", "Bila matangazo", "Ruka nyimbo bila kikomo", "Pakua kwa matumizi ya nje ya mtandao", "Ubora wa juu wa sauti"];
 
 export default function Plans() {
   const router = useRouter();
+  const { t } = useLang();
+  const PERKS = [t("plans.perk1"), t("plans.perk2"), t("plans.perk3"), t("plans.perk4"), t("plans.perk5")];
   const { isGuest, effectivePremium, billingEnabled, refresh, user } = useAuth();
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,17 +60,17 @@ export default function Plans() {
           <View style={styles.heroIcon}>
             <Ionicons name="star" size={40} color={COLORS.warning} />
           </View>
-          <Text style={styles.h1}>Vibe Premium</Text>
-          <Text style={styles.sub}>Chagua unavyotaka kuchangia</Text>
+          <Text style={styles.h1}>{t("plans.title")}</Text>
+          <Text style={styles.sub}>{t("plans.sub")}</Text>
 
           {effectivePremium ? (
             <View style={styles.activeCard} testID="plans-active">
               <Ionicons name="checkmark-circle" size={24} color={COLORS.success} />
-              <Text style={styles.activeText}>{billingEnabled ? "Wewe ni mwanachama Premium" : "Kila kitu ni bure kwa sasa!"}</Text>
+              <Text style={styles.activeText}>{billingEnabled ? t("plans.premiumActive") : t("plans.freeNow")}</Text>
               {billingEnabled && user?.subscription?.expires_at ? (
-                <Text style={styles.activeSub}>Inaisha: {new Date(user.subscription.expires_at).toLocaleDateString()}</Text>
+                <Text style={styles.activeSub}>{t("plans.expires")}: {new Date(user.subscription.expires_at).toLocaleDateString()}</Text>
               ) : !billingEnabled ? (
-                <Text style={styles.activeSub}>Malipo yamezimwa — furahia bila kikomo, pakua bila malipo</Text>
+                <Text style={styles.activeSub}>{t("plans.freeNowSub")}</Text>
               ) : null}
             </View>
           ) : null}
@@ -88,14 +89,14 @@ export default function Plans() {
           ) : (
             plans.map((pl, idx) => (
               <Pressable key={pl.plan_id} testID={`plan-${pl.plan_id}`} style={[styles.planCard, idx === 1 && styles.planCardFeatured]} onPress={() => { if (!effectivePremium) setSelected(pl); }}>
-                {idx === 1 ? <View style={styles.badge}><Text style={styles.badgeText}>MAARUFU</Text></View> : null}
+                {idx === 1 ? <View style={styles.badge}><Text style={styles.badgeText}>{t("plans.popular")}</Text></View> : null}
                 <View style={{ flex: 1 }}>
                   <Text style={styles.planName}>{pl.name}</Text>
                   <Text style={styles.planDesc}>{pl.description}</Text>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
                   <Text style={styles.planPrice}>{pl.currency} {pl.price.toLocaleString()}</Text>
-                  <Text style={styles.planDays}>/ siku {pl.duration_days}</Text>
+                  <Text style={styles.planDays}>{t("plans.perDay")} {pl.duration_days}</Text>
                 </View>
               </Pressable>
             ))

@@ -8,6 +8,7 @@ import { StatusBar } from "expo-status-bar";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { AuthProvider } from "@/src/context/AuthContext";
+import { LanguageProvider } from "@/src/context/LanguageContext";
 import { PlayerProvider } from "@/src/context/PlayerContext";
 import BlockModal from "@/src/components/BlockModal";
 import GlobalMiniPlayer from "@/src/components/GlobalMiniPlayer";
@@ -40,6 +41,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: COLORS.background }}>
       <SafeAreaProvider>
         <AuthProvider>
+          <LanguageProvider>
           <PlayerProvider>
             <StatusBar style="light" />
             <View style={{ flex: 1, backgroundColor: COLORS.background }}>
@@ -50,6 +52,7 @@ export default function RootLayout() {
               <BlockModal />
             </View>
           </PlayerProvider>
+          </LanguageProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

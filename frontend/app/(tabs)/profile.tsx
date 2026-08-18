@@ -5,15 +5,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "@/src/context/AuthContext";
+import { useLang } from "@/src/context/LanguageContext";
 import { authApi } from "@/src/services/api";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 
 export default function Profile() {
   const router = useRouter();
   const { user, isGuest, isAdmin, effectivePremium, billingEnabled, refreshBilling, logout } = useAuth();
+  const { t, lang, setLang, languages } = useLang();
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteErr, setDeleteErr] = useState("");
+  const [showLang, setShowLang] = useState(false);
 
   useFocusEffect(React.useCallback(() => { refreshBilling(); }, [refreshBilling]));
 
@@ -33,12 +36,12 @@ export default function Profile() {
   };
 
   const rows = [
-    { key: "plans", label: "Kifurushi & Malipo", icon: "star", route: "/plans" },
-    { key: "downloads", label: "Nyimbo Zilizopakuliwa", icon: "cloud-download", route: "/downloads" },
-    { key: "neno", label: "Neno la Leo", icon: "sunny", route: "/neno" },
-    { key: "churches", label: "Makanisa", icon: "business", route: "/churches" },
-    { key: "radio", label: "Redio", icon: "radio", route: "/radio" },
+    { key: "plans", label: t("profile.plans"), icon: "star", route: "/plans" },
+    { key: "downloads", label: t("profile.downloads"), icon: "cloud-download", route: "/downloads" },
+    { key: "terms", label: t("profile.terms"), icon: "document-text", route: "/legal/terms" },
+    { key: "privacy", label: t("profile.privacy"), icon: "shield-checkmark", route: "/legal/privacy" },
   ];
+  const currentLangName = languages.find((l) => l.code === lang)?.name || lang;
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -51,8 +54,8 @@ export default function Profile() {
           <View style={styles.avatar}>
             <Ionicons name="person" size={40} color="#fff" />
           </View>
-          <Text style={styles.name}>{isGuest ? "Mgeni" : user?.name}</Text>
-          <Text style={styles.email}>{isGuest ? "Hujaiingia" : user?.email}</Text>
+          <Text style={styles.name}>{isGuest ? t("profile.guest") : user?.name}</Text>
+          <Text style={styles.email}>{isGuest ? t("profile.notLoggedIn") : user?.email}</Text>
           {effectivePremium && !isGuest ? (
             <View style={styles.premiumBadge}>
               <Ionicons name="star" size={14} color="#000" />
@@ -64,7 +67,7 @@ export default function Profile() {
         <View style={styles.body}>
           {isGuest ? (
             <Pressable testID="profile-login" style={styles.primary} onPress={() => router.push("/(auth)/login")}>
-              <Text style={styles.primaryText}>Ingia au Jisajili</Text>
+              <Text style={styles.primaryText}>{t("profile.loginCta")}</Text>
             </Pressable>
           ) : null}
 
@@ -72,8 +75,8 @@ export default function Profile() {
             <Pressable testID="profile-upgrade" style={styles.upgrade} onPress={() => router.push("/plans")}>
               <Ionicons name="sparkles" size={22} color="#000" />
               <View style={{ flex: 1, marginLeft: SPACING.sm }}>
-                <Text style={styles.upgradeTitle}>Nenda Premium</Text>
-                <Text style={styles.upgradeSub}>Sikiliza bila kikomo, bila matangazo</Text>
+                <Text style={styles.upgradeTitle}>{t("profile.goPremium")}</Text>
+                <Text style={styles.upgradeSub}>{t("profile.goPremiumSub")}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#000" />
             </Pressable>
@@ -87,10 +90,17 @@ export default function Profile() {
             </Pressable>
           ))}
 
+          <Pressable testID="profile-language" style={styles.row} onPress={() => setShowLang(true)}>
+            <Ionicons name="language" size={22} color={COLORS.primary} />
+            <Text style={styles.rowLabel}>{t("profile.language")}</Text>
+            <Text style={styles.rowValue}>{currentLangName}</Text>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+          </Pressable>
+
           {isAdmin ? (
             <Pressable testID="profile-admin" style={[styles.row, styles.adminRow]} onPress={() => router.push("/admin")}>
               <Ionicons name="shield-checkmark" size={22} color={COLORS.warning} />
-              <Text style={[styles.rowLabel, { color: COLORS.warning }]}>Dashibodi ya Admin</Text>
+              <Text style={[styles.rowLabel, { color: COLORS.warning }]}>{t("profile.adminDash")}</Text>
               <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
             </Pressable>
           ) : null}
@@ -98,8 +108,8 @@ export default function Profile() {
           <Pressable testID="profile-artist" style={[styles.row, styles.artistRow]} onPress={() => router.push("/artist")}>
             <Ionicons name="mic" size={22} color={COLORS.primaryLight} />
             <View style={{ flex: 1, marginLeft: SPACING.md }}>
-              <Text style={[styles.rowLabel, { marginLeft: 0, color: COLORS.primaryLight }]}>Artist Portal</Text>
-              <Text style={styles.artistSub}>Wewe ni msanii? Pakia muziki na upate mapato</Text>
+              <Text style={[styles.rowLabel, { marginLeft: 0, color: COLORS.primaryLight }]}>{t("profile.artistPortal")}</Text>
+              <Text style={styles.artistSub}>{t("profile.artistSub")}</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
           </Pressable>
@@ -108,20 +118,37 @@ export default function Profile() {
           {!isGuest ? (
             <Pressable testID="profile-logout" style={styles.logout} onPress={async () => { await logout(); router.replace("/(tabs)"); }}>
               <Ionicons name="log-out-outline" size={22} color={COLORS.error} />
-              <Text style={styles.logoutText}>Toka</Text>
+              <Text style={styles.logoutText}>{t("profile.logout")}</Text>
             </Pressable>
           ) : null}
 
           {!isGuest && !isAdmin ? (
             <Pressable testID="profile-delete-account" style={styles.deleteBtn} onPress={() => { setDeleteErr(""); setShowDelete(true); }}>
               <Ionicons name="trash-outline" size={18} color={COLORS.error} />
-              <Text style={styles.deleteText}>Futa Akaunti</Text>
+              <Text style={styles.deleteText}>{t("profile.deleteAccount")}</Text>
             </Pressable>
           ) : null}
 
-          <Text style={styles.version}>Vibe v1.0.0</Text>
+          <Text style={styles.version}>{t("profile.version")}</Text>
         </View>
       </ScrollView>
+
+      <Modal transparent visible={showLang} animationType="fade" onRequestClose={() => setShowLang(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowLang(false)}>
+          <View style={styles.langCard} testID="language-modal">
+            <Text style={styles.langTitle}>{t("common.selectLanguage")}</Text>
+            {languages.map((l) => (
+              <Pressable key={l.code} testID={`lang-${l.code}`} style={styles.langRow} onPress={() => { setLang(l.code); setShowLang(false); }}>
+                <Text style={[styles.langName, lang === l.code && { color: COLORS.primary, fontWeight: "800" }]}>{l.name}</Text>
+                {lang === l.code ? <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} /> : <View style={{ width: 20 }} />}
+              </Pressable>
+            ))}
+            <Pressable style={styles.langCancel} onPress={() => setShowLang(false)}>
+              <Text style={styles.langCancelText}>{t("common.cancel")}</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
 
       <Modal transparent visible={showDelete} animationType="fade" onRequestClose={() => setShowDelete(false)}>
         <View style={styles.modalOverlay}>
@@ -168,6 +195,13 @@ const styles = StyleSheet.create({
   artistRow: { borderColor: COLORS.primaryLight },
   artistSub: { color: COLORS.textSecondary, fontSize: FONT.xs, marginTop: 2 },
   rowLabel: { flex: 1, color: COLORS.text, fontSize: FONT.md, fontWeight: "600", marginLeft: SPACING.md },
+  rowValue: { color: COLORS.textMuted, fontSize: FONT.sm, marginRight: SPACING.xs },
+  langCard: { width: "100%", maxWidth: 360, backgroundColor: COLORS.card, borderRadius: RADIUS.lg, padding: SPACING.lg, borderWidth: 1, borderColor: COLORS.border },
+  langTitle: { color: COLORS.text, fontSize: FONT.lg, fontWeight: "800", marginBottom: SPACING.md },
+  langRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  langName: { color: COLORS.text, fontSize: FONT.md, fontWeight: "600" },
+  langCancel: { alignItems: "center", paddingVertical: SPACING.md, marginTop: SPACING.xs },
+  langCancelText: { color: COLORS.textMuted, fontSize: FONT.md, fontWeight: "600" },
   logout: { flexDirection: "row", alignItems: "center", justifyContent: "center", padding: SPACING.md, marginTop: SPACING.md },
   logoutText: { color: COLORS.error, fontSize: FONT.md, fontWeight: "700", marginLeft: SPACING.sm },
   deleteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", padding: SPACING.sm },

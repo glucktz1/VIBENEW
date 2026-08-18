@@ -85,6 +85,7 @@ export const billingApi = {
   status: () => api.get<any>("/billing-status"),
   plans: () => api.get<any[]>("/subscription-plans"),
   subscribe: (plan_id: string, phone: string) => api.post<any>("/payment/azampay/initiate", { plan_id, phone }),
+  publicSettings: () => api.get<any>("/public-settings"),
 };
 
 export const meApi = {
@@ -181,6 +182,8 @@ export const adminApi = {
   marketingCampaigns: () => api.get<any>("/admin/marketing-campaigns"),
   createMarketingCampaign: (b: any) => api.post<any>("/admin/marketing-campaigns", b),
   deleteMarketingCampaign: (id: string) => api.del(`/admin/marketing-campaigns/${id}`),
+  translationsAdmin: () => api.get<any>("/admin/translations"),
+  setTranslations: (translations: any) => api.put<any>("/admin/translations", { translations }),
   recommendations: () => api.get<any>("/admin/recommendations"),
   updateRecommendations: (b: any) => api.put<any>("/admin/recommendations", b),
   setUserRole: (email: string, role: string) => api.patch<any>(`/admin/users/${encodeURIComponent(email)}/role`, { role }),

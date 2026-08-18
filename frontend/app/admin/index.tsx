@@ -75,6 +75,7 @@ const NAV: any[] = [
     { label: "Monetization", icon: "card", tab: "settings", sub: "monetization" },
     { label: "Auth Settings", icon: "lock-closed", tab: "settings", sub: "auth" },
     { label: "Security", icon: "lock-closed-outline", tab: "settings", sub: "security" },
+    { label: "Language", icon: "language", tab: "settings", sub: "language" },
   ]},
   { type: "item", label: "Advertising & Campaigns", icon: "megaphone", tab: "advertising" },
   { type: "item", label: "Feedback Manager", icon: "chatbubble-ellipses" },

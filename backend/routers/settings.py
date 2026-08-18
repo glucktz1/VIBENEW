@@ -63,6 +63,23 @@ async def update_settings(body: dict, admin: dict = Depends(require_admin)):
     return {**DEFAULT_SETTINGS, **doc}
 
 
+# ---------------- Translations (i18n) ----------------
+@router.get("/translations")
+async def get_translations_admin(admin: dict = Depends(require_admin)):
+    doc = await db.app_config.find_one({"key": "translations"}, {"_id": 0})
+    return (doc or {}).get("value", {})
+
+
+@router.put("/translations")
+async def set_translations(body: dict, admin: dict = Depends(require_admin)):
+    # body is the full translations map: { "en": {...}, "sw": {...}, "<code>": {...} }
+    payload = body.get("translations", body) if isinstance(body, dict) else {}
+    clean = {str(k): {str(kk): str(vv) for kk, vv in (v or {}).items()} for k, v in payload.items() if isinstance(v, dict)}
+    await db.app_config.update_one({"key": "translations"}, {"$set": {"value": clean}}, upsert=True)
+    return {"ok": True, "languages": list(clean.keys()), "value": clean}
+
+
+
 # ---------------- Advertising campaigns ----------------
 class CampaignIn(BaseModel):
     title: str

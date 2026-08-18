@@ -8,21 +8,23 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { musicApi } from "@/src/services/api";
 import { useAuth } from "@/src/context/AuthContext";
 import { usePlayer, Track } from "@/src/context/PlayerContext";
+import { useLang } from "@/src/context/LanguageContext";
 import AlbumCard from "@/src/components/AlbumCard";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 import { formatCount } from "@/src/utils/format";
 
 const QUICK = [
-  { key: "radio", label: "Redio", icon: "radio", route: "/radio", color: "#0077B6" },
-  { key: "podcasts", label: "Podcasts", icon: "mic", route: "/podcasts", color: "#FFA502" },
-  { key: "books", label: "Vitabu", icon: "book", route: "/(tabs)/bible", color: "#2ED573" },
-  { key: "studios", label: "Studio", icon: "business", route: "/churches", color: "#a78bfa" },
+  { key: "radio", tkey: "home.radio", icon: "radio", route: "/radio", color: "#0077B6" },
+  { key: "podcasts", tkey: "home.podcasts", icon: "mic", route: "/podcasts", color: "#FFA502" },
+  { key: "books", tkey: "home.books", icon: "book", route: "/(tabs)/bible", color: "#2ED573" },
+  { key: "studios", tkey: "home.studio", icon: "business", route: "/churches", color: "#a78bfa" },
 ];
 
 export default function Home() {
   const router = useRouter();
   const { user, isGuest } = useAuth();
   const { playTrack } = usePlayer();
+  const { t, sectionTitle } = useLang();
   const [sections, setSections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -75,7 +77,7 @@ export default function Home() {
   }
 
   const hour = new Date().getHours();
-  const greet = hour < 12 ? "Habari za asubuhi" : hour < 17 ? "Habari za mchana" : "Habari za jioni";
+  const greet = hour < 12 ? t("home.morning") : hour < 17 ? t("home.afternoon") : t("home.evening");
 
   return (
     <View style={styles.root}>
@@ -90,7 +92,7 @@ export default function Home() {
           <View style={styles.header}>
             <View>
               <Text style={styles.greet}>{greet}</Text>
-              <Text style={styles.name}>{user?.name || "Karibu Vibe"}</Text>
+              <Text style={styles.name}>{user?.name || t("home.welcome")}</Text>
             </View>
             <Pressable testID="home-profile" onPress={() => router.push("/(tabs)/profile")} style={styles.avatar}>
               <Ionicons name="person" size={20} color="#fff" />
@@ -100,7 +102,7 @@ export default function Home() {
           {isGuest ? (
             <Pressable testID="home-guest-banner" style={styles.banner} onPress={() => router.push("/(auth)/login")}>
               <Ionicons name="sparkles" size={20} color={COLORS.primary} />
-              <Text style={styles.bannerText}>Ingia ili kufurahia bila kikomo</Text>
+              <Text style={styles.bannerText}>{t("home.guestBanner")}</Text>
               <Ionicons name="chevron-forward" size={18} color={COLORS.textSecondary} />
             </Pressable>
           ) : null}
@@ -112,7 +114,7 @@ export default function Home() {
                 <View style={[styles.quickIcon, { backgroundColor: q.color }]}>
                   <Ionicons name={q.icon as any} size={20} color="#fff" />
                 </View>
-                <Text style={styles.quickLabel} numberOfLines={1}>{q.label}</Text>
+                <Text style={styles.quickLabel} numberOfLines={1}>{t(q.tkey)}</Text>
               </Pressable>
             ))}
           </View>
@@ -121,7 +123,7 @@ export default function Home() {
           {genres.length > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillsRow} contentContainerStyle={styles.pillsContent}>
               <Pressable testID="genre-all" style={[styles.pill, genre === "all" && styles.pillOn]} onPress={() => setGenre("all")}>
-                <Text style={[styles.pillText, genre === "all" && styles.pillTextOn]}>Zote</Text>
+                <Text style={[styles.pillText, genre === "all" && styles.pillTextOn]}>{t("home.all")}</Text>
               </Pressable>
               {genres.map((g) => (
                 <Pressable key={g.category_id} testID={`genre-${g.category_id}`} style={[styles.pill, genre === g.category_id && styles.pillOn]} onPress={() => setGenre(g.category_id)}>
@@ -136,7 +138,7 @@ export default function Home() {
             genreLoading ? (
               <ActivityIndicator color={COLORS.primary} style={{ marginTop: SPACING.xl }} />
             ) : genreAlbums.length === 0 ? (
-              <Text style={styles.genreEmpty}>Hakuna albamu kwenye aina hii bado.</Text>
+              <Text style={styles.genreEmpty}>{t("home.emptyGenre")}</Text>
             ) : (
               <View style={styles.genreGrid}>
                 {genreAlbums.map((a) => (
@@ -149,7 +151,7 @@ export default function Home() {
           {/* Sections */}
           {sections.map((section) => (
             <View key={section.id} style={styles.section}>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
+              <Text style={styles.sectionTitle}>{sectionTitle(section.id, section.title)}</Text>
               {section.type === "albums" ? (
                 <FlatList
                   data={section.items}
@@ -174,7 +176,7 @@ export default function Home() {
                         <View style={[styles.artistArt, styles.artistFallback]}><Ionicons name="person" size={30} color="#fff" /></View>
                       )}
                       <Text style={styles.artistName} numberOfLines={1}>{item.name}</Text>
-                      <Text style={styles.songArtist} numberOfLines={1}>{item.plays > 0 ? `${formatCount(item.plays)} michezo` : `${item.albums_count} albamu`}</Text>
+                      <Text style={styles.songArtist} numberOfLines={1}>{item.plays > 0 ? `${formatCount(item.plays)} ${t("home.plays")}` : `${item.albums_count} ${t("home.albums")}`}</Text>
                     </Pressable>
                   )}
                 />
@@ -190,7 +192,7 @@ export default function Home() {
                       <Image source={{ uri: item.thumbnail }} style={styles.recArt} contentFit="cover" transition={200} />
                       <View style={{ flex: 1, marginLeft: SPACING.sm }}>
                         <Text style={styles.songTitle} numberOfLines={1}>{item.title}</Text>
-                        <Text style={styles.songArtist} numberOfLines={1}>{item.plays > 0 ? `${formatCount(item.plays)} michezo` : (item.artist_name || "Vibe")}</Text>
+                        <Text style={styles.songArtist} numberOfLines={1}>{item.plays > 0 ? `${formatCount(item.plays)} ${t("home.plays")}` : (item.artist_name || "Vibe")}</Text>
                       </View>
                       <View style={styles.recPlay}><Ionicons name="play" size={16} color="#fff" /></View>
                     </Pressable>
@@ -208,7 +210,7 @@ export default function Home() {
                       <Image source={{ uri: item.thumbnail }} style={styles.pickArt} contentFit="cover" transition={200} />
                       <View style={styles.pickOverlay}>
                         <Text style={styles.pickTitle} numberOfLines={1}>{item.title}</Text>
-                        <Text style={styles.pickSub} numberOfLines={1}>{item.artist_name || "Vibe"} · {item.songs_count || 0} nyimbo</Text>
+                        <Text style={styles.pickSub} numberOfLines={1}>{item.artist_name || "Vibe"} · {item.songs_count || 0} {t("home.songs")}</Text>
                       </View>
                       <View style={styles.pickPlay}><Ionicons name="play" size={22} color="#fff" /></View>
                     </Pressable>

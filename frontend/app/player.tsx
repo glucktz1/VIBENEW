@@ -8,6 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { usePlayer } from "@/src/context/PlayerContext";
+import { useLang } from "@/src/context/LanguageContext";
 import { libraryApi } from "@/src/services/api";
 import { isDownloaded, downloadTrack, removeDownload, isWeb } from "@/src/services/downloads";
 import AddToPlaylistSheet from "@/src/components/AddToPlaylistSheet";
@@ -28,6 +29,7 @@ export default function Player() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { current, isPlaying, isBuffering, position, duration, togglePlay, next, prev, seek, previewMode, gatePremium, promptDownloadApp } = usePlayer();
+  const { t } = useLang();
   const [barWidth, setBarWidth] = useState(1);
   const [liked, setLiked] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
@@ -54,9 +56,9 @@ export default function Player() {
   if (!current) {
     return (
       <View style={styles.center}>
-        <Text style={{ color: COLORS.textSecondary }}>Hakuna wimbo unaochezwa</Text>
+        <Text style={{ color: COLORS.textSecondary }}>{t("player.nothingPlaying")}</Text>
         <Pressable onPress={() => router.back()} style={{ marginTop: 20 }}>
-          <Text style={{ color: COLORS.primary }}>Rudi</Text>
+          <Text style={{ color: COLORS.primary }}>{t("common.back")}</Text>
         </Pressable>
       </View>
     );
@@ -138,7 +140,7 @@ export default function Player() {
             <Ionicons name="chevron-down" size={30} color={COLORS.text} />
           </Pressable>
           <View style={{ flex: 1, alignItems: "center" }}>
-            <Text style={styles.headerLabel}>{isLive ? "REDIO" : "INACHEZA KUTOKA"}</Text>
+            <Text style={styles.headerLabel}>{isLive ? t("player.radio") : t("player.playingFrom")}</Text>
             <Text style={styles.headerAlbum} numberOfLines={1}>{current.album_title || current.artist_name || "Vibe"}</Text>
           </View>
           <Pressable testID="player-queue" onPress={() => setShowQueue(true)} hitSlop={10}>
@@ -153,7 +155,7 @@ export default function Player() {
         {previewMode ? (
           <View testID="preview-banner" style={styles.previewBanner}>
             <Ionicons name="time" size={16} color="#000" />
-            <Text style={styles.previewText}>Hali ya Onjo (sekunde 15) · Changia usikilize kamili</Text>
+            <Text style={styles.previewText}>{t("player.previewNote")}</Text>
           </View>
         ) : null}
 
