@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { Platform } from "react-native";
 import * as Device from "expo-device";
 import { storage } from "@/src/utils/storage";
-import { authApi, TOKEN_KEY } from "@/src/services/api";
+import { authApi, billingApi, TOKEN_KEY } from "@/src/services/api";
 
 type User = {
   id: string;
@@ -21,10 +21,14 @@ type AuthCtx = {
   isGuest: boolean;
   isAdmin: boolean;
   isPremium: boolean;
+  billingEnabled: boolean;
+  premiumForAll: boolean;
+  effectivePremium: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  refreshBilling: () => Promise<void>;
 };
 
 const Ctx = createContext<AuthCtx>({} as AuthCtx);
@@ -33,6 +37,16 @@ export const useAuth = () => useContext(Ctx);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User>(null);
   const [loading, setLoading] = useState(true);
+  const [billingEnabled, setBillingEnabled] = useState(true);
+  const [premiumForAll, setPremiumForAll] = useState(false);
+
+  const refreshBilling = useCallback(async () => {
+    try {
+      const b = await billingApi.status();
+      setBillingEnabled(b.billing_enabled !== false);
+      setPremiumForAll(!!b.premium_for_all);
+    } catch {}
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -51,10 +65,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      await refresh();
+      await Promise.all([refresh(), refreshBilling()]);
       setLoading(false);
     })();
-  }, [refresh]);
+  }, [refresh, refreshBilling]);
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await authApi.login(email, password);
@@ -79,6 +93,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  const isPremium = !!user && user.is_premium;
+  const effectivePremium = isPremium || !billingEnabled || premiumForAll;
+
   return (
     <Ctx.Provider
       value={{
@@ -86,11 +103,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         isGuest: !user,
         isAdmin: !!user && ["admin", "moderator", "content_manager"].includes(user.role),
-        isPremium: !!user && user.is_premium,
+        isPremium,
+        billingEnabled,
+        premiumForAll,
+        effectivePremium,
         login,
         register,
         logout,
         refresh,
+        refreshBilling,
       }}
     >
       {children}

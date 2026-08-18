@@ -332,3 +332,14 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
   - FIX: GET /categories filtered status:"active" but seeded categories have no status → returned 0. Changed to {"status": {"$ne": "inactive"}} so all genres show.
 - Contribution/Ringtone banner "not on native": ROOT CAUSE = stale production build, NOT a code bug. usePlayerPrompt guarantees a banner for any logged-in (non-guest) user; verified on preview it renders on the mini player for logged-in free user (u1@test.com). Code is platform-identical (no .web/.native variants, no Platform guards hiding it). Fix = user must REDEPLOY + regenerate Android build to pick up current code. (If it still fails on a fresh native build, deeper native debug needed.)
 - Verified via screenshots: pills + new order + genre grid (Gospel) + mini-player banner.
+
+## Session 21 — Billing toggle now fully reflects in the app
+- ROOT BUG: admin Settings→Monetization "Billing Enabled" saved to `settings` collection (key "app"), but GET /billing-status read a different `app_config.billing` key → toggle had no effect on the app.
+  - billing.py /billing-status: now reads billing_enabled + premium_for_all from `settings` (key "app") as single source of truth (falls back to app_config.billing only if settings lacks the key). Also returns premium_for_all.
+- AuthContext: fetches billing on mount + refreshBilling(); exposes billingEnabled, premiumForAll, and effectivePremium = isPremium || !billingEnabled || premiumForAll. Added refreshBilling to ctx.
+- PlayerContext: restriction/prompt/download gating now keyed off effectivePremium (isPremiumRef = effectivePremium). Billing OFF ⇒ no skip/preview limits, background pause, or pay gates; downloads allowed via gatePremium.
+- PlayerPromptBanner: uses effectivePremium ⇒ billing OFF shows ringtone prompt only (never the "Changia"/pay prompt).
+- profile.tsx: added billing indicator badge in hero — cash icon with a status dot (GREEN when billing ON, GRAY when OFF). PREMIUM badge + hides "Nenda Premium" upgrade when effectivePremium. useFocusEffect→refreshBilling so it updates live on tab focus.
+- plans.tsx: when billing OFF, hides plan cards/checkout and shows "Kila kitu ni bure kwa sasa!" active state; uses effectivePremium.
+- Verified via screenshots: billing OFF (gray dot, PREMIUM, no upgrade) and billing ON (green dot, upgrade CTA); curl confirmed /billing-status now flips with admin PUT /admin/settings {billing_enabled}.
+- NOTE: consumer app reflects toggle on next load or profile-tab focus (refreshBilling). Left billing ON in preview after testing.

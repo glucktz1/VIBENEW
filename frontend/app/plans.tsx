@@ -12,7 +12,7 @@ const PERKS = ["Sikiliza bila kikomo", "Bila matangazo", "Ruka nyimbo bila kikom
 
 export default function Plans() {
   const router = useRouter();
-  const { isGuest, isPremium, refresh, user } = useAuth();
+  const { isGuest, effectivePremium, billingEnabled, refresh, user } = useAuth();
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<any>(null);
@@ -62,12 +62,14 @@ export default function Plans() {
           <Text style={styles.h1}>Vibe Premium</Text>
           <Text style={styles.sub}>Chagua unavyotaka kuchangia</Text>
 
-          {isPremium ? (
+          {effectivePremium ? (
             <View style={styles.activeCard} testID="plans-active">
               <Ionicons name="checkmark-circle" size={24} color={COLORS.success} />
-              <Text style={styles.activeText}>Wewe ni mwanachama Premium</Text>
-              {user?.subscription?.expires_at ? (
+              <Text style={styles.activeText}>{billingEnabled ? "Wewe ni mwanachama Premium" : "Kila kitu ni bure kwa sasa!"}</Text>
+              {billingEnabled && user?.subscription?.expires_at ? (
                 <Text style={styles.activeSub}>Inaisha: {new Date(user.subscription.expires_at).toLocaleDateString()}</Text>
+              ) : !billingEnabled ? (
+                <Text style={styles.activeSub}>Malipo yamezimwa — furahia bila kikomo, pakua bila malipo</Text>
               ) : null}
             </View>
           ) : null}
@@ -81,11 +83,11 @@ export default function Plans() {
             ))}
           </View>
 
-          {loading ? (
+          {!billingEnabled ? null : loading ? (
             <ActivityIndicator color={COLORS.primary} style={{ marginTop: SPACING.lg }} />
           ) : (
             plans.map((pl, idx) => (
-              <Pressable key={pl.plan_id} testID={`plan-${pl.plan_id}`} style={[styles.planCard, idx === 1 && styles.planCardFeatured]} onPress={() => { if (!isPremium) setSelected(pl); }}>
+              <Pressable key={pl.plan_id} testID={`plan-${pl.plan_id}`} style={[styles.planCard, idx === 1 && styles.planCardFeatured]} onPress={() => { if (!effectivePremium) setSelected(pl); }}>
                 {idx === 1 ? <View style={styles.badge}><Text style={styles.badgeText}>MAARUFU</Text></View> : null}
                 <View style={{ flex: 1 }}>
                   <Text style={styles.planName}>{pl.name}</Text>

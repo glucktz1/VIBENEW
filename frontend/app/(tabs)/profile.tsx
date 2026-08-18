@@ -3,17 +3,19 @@ import { View, Text, StyleSheet, Pressable, ScrollView, Modal, ActivityIndicator
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "@/src/context/AuthContext";
 import { authApi } from "@/src/services/api";
 import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 
 export default function Profile() {
   const router = useRouter();
-  const { user, isGuest, isAdmin, isPremium, logout } = useAuth();
+  const { user, isGuest, isAdmin, effectivePremium, billingEnabled, refreshBilling, logout } = useAuth();
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteErr, setDeleteErr] = useState("");
+
+  useFocusEffect(React.useCallback(() => { refreshBilling(); }, [refreshBilling]));
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -42,12 +44,16 @@ export default function Profile() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 160 }}>
         <LinearGradient colors={[COLORS.primaryDark, COLORS.background]} style={styles.hero}>
+          <View testID="billing-indicator" style={styles.billingBadge}>
+            <Ionicons name="cash" size={18} color={COLORS.success} />
+            <View style={[styles.billingDot, { backgroundColor: billingEnabled ? COLORS.success : COLORS.textMuted }]} />
+          </View>
           <View style={styles.avatar}>
             <Ionicons name="person" size={40} color="#fff" />
           </View>
           <Text style={styles.name}>{isGuest ? "Mgeni" : user?.name}</Text>
           <Text style={styles.email}>{isGuest ? "Hujaiingia" : user?.email}</Text>
-          {isPremium ? (
+          {effectivePremium && !isGuest ? (
             <View style={styles.premiumBadge}>
               <Ionicons name="star" size={14} color="#000" />
               <Text style={styles.premiumText}>PREMIUM</Text>
@@ -62,7 +68,7 @@ export default function Profile() {
             </Pressable>
           ) : null}
 
-          {!isGuest && !isPremium ? (
+          {!isGuest && !effectivePremium && billingEnabled ? (
             <Pressable testID="profile-upgrade" style={styles.upgrade} onPress={() => router.push("/plans")}>
               <Ionicons name="sparkles" size={22} color="#000" />
               <View style={{ flex: 1, marginLeft: SPACING.sm }}>
@@ -144,6 +150,8 @@ export default function Profile() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.background },
   hero: { alignItems: "center", paddingTop: SPACING.xl, paddingBottom: SPACING.xl },
+  billingBadge: { position: "absolute", top: SPACING.md, right: SPACING.md, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.35)", alignItems: "center", justifyContent: "center" },
+  billingDot: { position: "absolute", top: 4, right: 4, width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: COLORS.background },
   avatar: { width: 90, height: 90, borderRadius: RADIUS.full, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center", marginBottom: SPACING.md },
   name: { color: COLORS.text, fontSize: FONT.xxl, fontWeight: "800" },
   email: { color: COLORS.textSecondary, fontSize: FONT.md, marginTop: 4 },

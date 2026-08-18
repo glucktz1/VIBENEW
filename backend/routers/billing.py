@@ -32,11 +32,17 @@ class SubscribeIn(BaseModel):
 
 @router.get("/billing-status")
 async def billing_status():
-    cfg = await db.app_config.find_one({"key": "billing"}, {"_id": 0})
-    enabled = cfg.get("value", True) if cfg else True
     settings = await db.settings.find_one({"key": "app"}, {"_id": 0}) or {}
+    # Admin Settings → Monetization is the single source of truth.
+    if "billing_enabled" in settings:
+        enabled = bool(settings.get("billing_enabled"))
+    else:
+        cfg = await db.app_config.find_one({"key": "billing"}, {"_id": 0})
+        enabled = cfg.get("value", True) if cfg else True
+    premium_for_all = bool(settings.get("premium_for_all", False))
     return {
         "billing_enabled": enabled,
+        "premium_for_all": premium_for_all,
         "guest_play_limit": GUEST_PLAY_LIMIT,
         "guest_skip_limit": GUEST_SKIP_LIMIT,
         "skip_tiers": [SKIP_TIER_1, SKIP_TIER_2, SKIP_TIER_3],

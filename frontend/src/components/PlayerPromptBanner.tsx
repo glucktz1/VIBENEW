@@ -9,7 +9,7 @@ import { COLORS, SPACING, FONT, RADIUS } from "@/src/theme";
 const NEW_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 export function usePlayerPrompt() {
-  const { isGuest, isPremium, user } = useAuth() as any;
+  const { isGuest, effectivePremium, user } = useAuth() as any;
   const { current, promptRingtonePct } = usePlayer() as any;
   let isNew = false;
   if (user?.created_at) {
@@ -17,8 +17,8 @@ export function usePlayerPrompt() {
     if (!isNaN(t)) isNew = Date.now() - t < NEW_WINDOW_MS;
   }
   if (isGuest) return { showRingtone: false, showContribute: false };
-  // Paid or just-joined users always get the ringtone prompt
-  if (isPremium || isNew) return { showRingtone: true, showContribute: false };
+  // Paid users, just-joined users, or when billing is OFF (everyone premium) => ringtone prompt only, never a pay prompt.
+  if (effectivePremium || isNew) return { showRingtone: true, showContribute: false };
   // FREE users: alternate between ringtone and contribute per admin-set ratio.
   // Deterministic per song (stable while a song plays, varies across songs).
   const pct = typeof promptRingtonePct === "number" ? promptRingtonePct : 50;

@@ -56,7 +56,7 @@ const SESSION_KEY = "vibe_last_session";
 const PREVIEW_PATTERN = [15, 15, 15, 0];
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
-  const { isGuest, isPremium } = useAuth();
+  const { isGuest, effectivePremium } = useAuth();
 
   const [current, setCurrent] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -136,12 +136,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   // keep refs in sync with auth-dependent flags
   const isGuestRef = useRef(isGuest);
-  const isPremiumRef = useRef(isPremium);
+  const isPremiumRef = useRef(effectivePremium);
   useEffect(() => {
     isGuestRef.current = isGuest;
-    isPremiumRef.current = isPremium;
+    isPremiumRef.current = effectivePremium;
     void refreshFreeHours();
-  }, [isGuest, isPremium, refreshFreeHours]);
+  }, [isGuest, effectivePremium, refreshFreeHours]);
 
   useEffect(() => {
     (async () => {
