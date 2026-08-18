@@ -110,6 +110,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const stopForFreeHours = useCallback(() => {
+    // Billing OFF (or premium) => everything is free, never stop for free-hours.
+    if (isPremiumRef.current) return;
     try { playerRef.current?.pause(); } catch {}
     setIsPlaying(false);
     freeRemainingRef.current = 0;
@@ -184,18 +186,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return !isPremiumRef.current;
   }, []);
 
-  // Gate a premium-only feature (like, download, playlist). Returns true if allowed.
+  // Gate a premium-only feature (download, add to playlist, like).
+  // Guests must sign in. Logged-in users are always allowed — monetization is
+  // driven only by playback thresholds (free minutes / skips) when billing is ON,
+  // and everything is free when billing is OFF.
   const gatePremium = useCallback(() => {
     if (isGuestRef.current) {
       setBlockReason("guest");
       return false;
     }
-    if (!isPremiumRef.current && billing.billing_enabled) {
-      setBlockReason("subscribe");
-      return false;
-    }
     return true;
-  }, [billing]);
+  }, []);
 
   const promptDownloadApp = useCallback(() => setBlockReason("download-app"), []);
 
@@ -242,8 +243,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           lastSaveRef.current = nowSec;
           void saveSession();
         }
-        // free listening-hours metering (only for free_hours grantees)
-        if (freeGrantRef.current && status.playing) {
+        // free listening-hours metering (only for free_hours grantees; skip when premium / billing OFF)
+        if (freeGrantRef.current && status.playing && !isPremiumRef.current) {
           const ct = status.currentTime;
           const delta = ct - freeLastCtRef.current;
           freeLastCtRef.current = ct;
@@ -406,7 +407,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     async (track: Track, q?: Track[]) => {
       const ok = await canStartPlayback();
       if (!ok) return;
-      if (freeGrantRef.current && freeRemainingRef.current <= 0) {
+      if (freeGrantRef.current && freeRemainingRef.current <= 0 && !isPremiumRef.current) {
         setBlockReason("subscribe");
         return;
       }

@@ -373,3 +373,14 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - CONCLUSION: user's app+web are PRODUCTION, running a stale deploy from before the Session 21 billing fix → needs redeploy.
 - Improvement: AuthContext now calls refreshBilling() on AppState 'active' (app foreground), so admin billing toggles reflect without a cold restart (previously only on mount + profile focus).
 - No other code bug found; all "subscribe" pay-prompt paths (gatePremium, skip logic, background pause) already gate on billing/effectivePremium. Only free-hours-exhaustion still shows subscribe (separate admin-enrollment feature, intended).
+
+## Session 25 — Billing as master switch (everything free when OFF) + Download/Playlist ungated
+- User rule (option A): billing is the master monetization switch.
+  - Billing OFF ⇒ EVERYTHING free: no skip limits, no free-hours enforcement (even if minutes exhausted), Download/Add-to-playlist allowed, no pay prompts (player shows ringtone banner). Verified in preview.
+  - Billing ON ⇒ only playback thresholds prompt to pay (free-hours grant exhaustion + skip tiers). Download/Add-to-playlist are NO LONGER pay-gated (always allowed for logged-in users) per user choice.
+- PlayerContext.tsx changes:
+  - gatePremium(): guests → login prompt; logged-in → always allowed (removed the "!premium && billing_enabled → subscribe" pay-gate).
+  - stopForFreeHours(): early-return when isPremiumRef (effectivePremium) true → never blocks when billing OFF/premium.
+  - free-hours metering tick gated with `&& !isPremiumRef.current`; playTrack free-hours block gated with `&& !isPremiumRef.current`.
+- Points 1 (filter pills) & 2 (billing dot gray/green + no pay prompt when off) were ALREADY fixed in preview (Sessions 21/23); user's native app is a stale build → needs redeploy + rebuild.
+- Verified preview: billing OFF, logged-in free user → plays, ringtone banner, no Nenda Premium modal; pills = Bongo Hits/Gospel/R&B/Amapiano/Taarabu.
