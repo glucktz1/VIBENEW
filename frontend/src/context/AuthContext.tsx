@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { Platform } from "react-native";
+import { Platform, AppState } from "react-native";
 import * as Device from "expo-device";
 import { storage } from "@/src/utils/storage";
 import { authApi, billingApi, TOKEN_KEY } from "@/src/services/api";
@@ -69,6 +69,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     })();
   }, [refresh, refreshBilling]);
+
+  // Re-check billing whenever the app returns to the foreground so admin toggles reflect quickly.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") void refreshBilling();
+    });
+    return () => sub.remove();
+  }, [refreshBilling]);
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await authApi.login(email, password);

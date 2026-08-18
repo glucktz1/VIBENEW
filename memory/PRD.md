@@ -367,3 +367,9 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
   - (tabs)/index.tsx: pills now load from musicApi.homeGenres() (was categories()). Selecting a pill still filters via musicApi.albums(?category_id=) (already linked to categories).
   - LayoutManager.tsx: added a "Filter Pills (Genres)" section — lists all categories with include toggle + up/down ordering; "Save Filter Pills" → setHomeGenres(enabled ids in order). Existing Home Rows section unchanged with its own "Save Layout".
 - Verified: public /home-genres default = [Bongo Hits, Gospel, R&B, Amapiano, Taarabu]; Home shows Zote + those 5; admin save round-trip (custom subset reflects on public, then restored); Layout Manager shows both sections.
+
+## Session 24 — Billing pay-prompt verification + foreground refresh
+- User report: "billing off but app & web still prompt to pay." Verified on PREVIEW (billing OFF): logged-in free user gets NO pay prompt / NO "Nenda Premium" modal; player shows the RINGTONE banner ("Weka... mlio wa simu") instead of "Changia". Billing-off gating is correct in code (Session 21 fix).
+- CONCLUSION: user's app+web are PRODUCTION, running a stale deploy from before the Session 21 billing fix → needs redeploy.
+- Improvement: AuthContext now calls refreshBilling() on AppState 'active' (app foreground), so admin billing toggles reflect without a cold restart (previously only on mount + profile focus).
+- No other code bug found; all "subscribe" pay-prompt paths (gatePremium, skip logic, background pause) already gate on billing/effectivePremium. Only free-hours-exhaustion still shows subscribe (separate admin-enrollment feature, intended).
