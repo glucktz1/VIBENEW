@@ -398,3 +398,9 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - PlayerContext now also refetches billing on AppState 'active' (AuthContext already did on mount+foreground+profile-focus), so both contexts stay in sync with the admin toggle without a restart.
 - billing-status remains the single source of truth from settings.billing_enabled.
 - testing_agent verified (both): backend PUT /admin/settings ↔ GET /billing-status round-trip (5/5 pytest); frontend billing OFF → GRAY dot + PREMIUM badge + no upgrade + ringtone banner + no subscribe modal; billing ON → GREEN dot + upgrade returns; toggling reflects via useFocusEffect/AppState without reload. Left billing OFF (user's desired state). No bugs.
+
+## Session 28 — One-tap genre pills replace (production data fix)
+- ROOT CAUSE of recurring "pills show Ibada/Sifa/Injili/Kwaya": pills are DATA-driven from the PRODUCTION categories collection; the requested genres never existed in the production DB, and the agent cannot edit production data from preview.
+- Enhanced POST /admin/categories/seed-genres: now also SETS app_config home_genres = the 5 genre ids, so one tap = pills become exactly Bongo Hits, Gospel, R&B, Amapiano, Taarabu (gospel categories kept in DB, just not shown as pills). Idempotent. Verified preview: /home-genres returns the 5.
+- Button already exists: Admin → Control & Management → Layout Management → Filter Pills → "Add default genres".
+- USER ACTION REQUIRED (production): Publish→Redeploy (so prod backend has this endpoint + button) → open PROD admin → Layout Management → tap "Add default genres" → rebuild/refresh app. This writes to the PRODUCTION db.

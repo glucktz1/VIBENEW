@@ -301,11 +301,14 @@ DEFAULT_GENRES = [
 
 @router.post("/categories/seed-genres")
 async def seed_genre_categories(admin: dict = Depends(require_admin)):
-    """Create any missing default genre categories (idempotent). Existing ones are kept."""
+    """Create missing default genre categories (idempotent) AND set the Home filter
+    pills to show exactly those genres. Existing categories are kept (not deleted)."""
     created = []
+    ids = []
     for name, color in DEFAULT_GENRES:
-        existing = await db.categories.find_one({"name": {"$regex": f"^{name}$", "$options": "i"}})
+        existing = await db.categories.find_one({"name": {"$regex": f"^{name}$", "$options": "i"}}, {"_id": 0})
         if existing:
+            ids.append(existing["category_id"])
             continue
         doc = {
             "category_id": f"cat_{uuid.uuid4().hex[:8]}",
@@ -315,7 +318,10 @@ async def seed_genre_categories(admin: dict = Depends(require_admin)):
         }
         await db.categories.insert_one(dict(doc))
         created.append(name)
-    return {"ok": True, "created": created}
+        ids.append(doc["category_id"])
+    # Make these genres the Home filter pills (replaces what's shown; gospel categories are kept in DB).
+    await db.app_config.update_one({"key": "home_genres"}, {"$set": {"key": "home_genres", "value": ids}}, upsert=True)
+    return {"ok": True, "created": created, "pills": [n for n, _ in DEFAULT_GENRES]}
 
 
 
