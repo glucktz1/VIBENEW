@@ -404,3 +404,12 @@ Clone the Gracefy platform (https://github.com/glucktz1/Gracefy) as-is — nativ
 - Enhanced POST /admin/categories/seed-genres: now also SETS app_config home_genres = the 5 genre ids, so one tap = pills become exactly Bongo Hits, Gospel, R&B, Amapiano, Taarabu (gospel categories kept in DB, just not shown as pills). Idempotent. Verified preview: /home-genres returns the 5.
 - Button already exists: Admin → Control & Management → Layout Management → Filter Pills → "Add default genres".
 - USER ACTION REQUIRED (production): Publish→Redeploy (so prod backend has this endpoint + button) → open PROD admin → Layout Management → tap "Add default genres" → rebuild/refresh app. This writes to the PRODUCTION db.
+
+## Session 29 — Bunny CDN integration for media uploads (COMPLETE & TESTED)
+- User requested migrating media from Emergent Object Storage to Bunny CDN for faster audio streaming. Provided Storage Zone `vibemusicapp`, password, Pull Zone `vibemusicapp.b-cdn.net`.
+- Verified region endpoint via smoke test: `https://storage.bunnycdn.com` (default) → 201; other regions → 401. Pull Zone serves back 200.
+- backend/.env: added BUNNY_STORAGE_ZONE, BUNNY_STORAGE_PASSWORD, BUNNY_STORAGE_ENDPOINT, BUNNY_PULL_ZONE_HOST.
+- storage.py: added `bunny_put_object(path,data,ct)` (raw PUT, AccessKey header) → returns public Pull Zone URL; `BUNNY_ENABLED` flag (true when all 3 zone/pw/host present).
+- routers/admin.py & routers/artists.py `/upload-audio`: when BUNNY_ENABLED, upload to Bunny and return direct CDN URL as media_url (else fall back to Emergent proxy `/api/artists/media/{path}`). Old Emergent files still served by unchanged `/media/{path}` proxy (backward compat).
+- admin.py /health: reports "Bunny CDN (Media)" when enabled.
+- TESTED (curl): admin upload → media_url = https://vibemusicapp.b-cdn.net/... , CDN fetch 200 audio/mpeg. Health shows Bunny CDN (Media). Artist upload = identical code path (artist@vibe.app not seeded in this fork DB — data issue, not code).

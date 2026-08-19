@@ -14,6 +14,32 @@ APP_NAME = "vibe"
 
 _storage_key = None
 
+# ---------------- Bunny CDN (primary for new media uploads) ----------------
+BUNNY_ZONE = (os.environ.get("BUNNY_STORAGE_ZONE") or "").strip()
+BUNNY_PASSWORD = (os.environ.get("BUNNY_STORAGE_PASSWORD") or "").strip()
+BUNNY_ENDPOINT = (os.environ.get("BUNNY_STORAGE_ENDPOINT") or "https://storage.bunnycdn.com").strip().rstrip("/")
+BUNNY_PULL_HOST = (os.environ.get("BUNNY_PULL_ZONE_HOST") or "").strip().rstrip("/")
+
+BUNNY_ENABLED = bool(BUNNY_ZONE and BUNNY_PASSWORD and BUNNY_PULL_HOST)
+
+
+def bunny_put_object(path: str, data: bytes, content_type: str) -> str:
+    """Upload raw bytes to Bunny Storage Zone (PUT). Returns the public Pull Zone URL.
+
+    `path` is a server-generated key like 'vibe/uploads/<artist>/<uuid>.mp3'.
+    """
+    clean = path.lstrip("/")
+    url = f"{BUNNY_ENDPOINT}/{BUNNY_ZONE}/{clean}"
+    resp = requests.put(
+        url,
+        headers={"AccessKey": BUNNY_PASSWORD, "Content-Type": content_type},
+        data=data,
+        timeout=180,
+    )
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Bunny upload failed HTTP {resp.status_code}: {resp.text[:200]}")
+    return f"https://{BUNNY_PULL_HOST}/{clean}"
+
 
 def init_storage():
     """Call once at startup. Idempotent — returns a reusable storage_key."""

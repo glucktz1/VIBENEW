@@ -20,7 +20,7 @@ from starlette.concurrency import run_in_threadpool
 
 from db import db, now_utc
 from auth_utils import hash_password, verify_password, JWT_SECRET, JWT_ALGORITHM, TOKEN_MINUTES, require_admin
-from storage import put_object, get_object, APP_NAME
+from storage import put_object, get_object, APP_NAME, BUNNY_ENABLED, bunny_put_object
 
 router = APIRouter(prefix="/api/artists", tags=["artists"])
 bearer = HTTPBearer(auto_error=False)
@@ -258,10 +258,14 @@ async def upload_audio(file: UploadFile = File(...), artist: dict = Depends(get_
     path = f"{APP_NAME}/uploads/{artist['artist_id']}/{uuid.uuid4().hex}.{ext}"
     ct = file.content_type or "audio/mpeg"
     try:
-        await run_in_threadpool(put_object, path, data, ct)
+        if BUNNY_ENABLED:
+            media_url = await run_in_threadpool(bunny_put_object, path, data, ct)
+        else:
+            await run_in_threadpool(put_object, path, data, ct)
+            media_url = f"/api/artists/media/{path}"
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Upakiaji umeshindikana: {e}")
-    return {"path": path, "media_url": f"/api/artists/media/{path}"}
+    return {"path": path, "media_url": media_url}
 
 
 @router.get("/media/{path:path}")

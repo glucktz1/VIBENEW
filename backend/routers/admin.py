@@ -7,7 +7,7 @@ import uuid
 
 from db import db, now_utc
 from auth_utils import require_admin
-from storage import put_object, get_object, APP_NAME
+from storage import put_object, get_object, APP_NAME, BUNNY_ENABLED, bunny_put_object
 from bson import ObjectId
 from bson.errors import InvalidId
 from datetime import timedelta, datetime, timezone
@@ -891,16 +891,22 @@ async def health(admin: dict = Depends(require_admin)):
     except Exception:
         db_ok = False
     try:
-        from storage import init_storage
-        init_storage()
-        storage_ok = True
+        from storage import init_storage, BUNNY_ENABLED
+        if BUNNY_ENABLED:
+            storage_ok = True
+            storage_name = "Bunny CDN (Media)"
+        else:
+            init_storage()
+            storage_ok = True
+            storage_name = "Object Storage (Audio)"
     except Exception:
         storage_ok = False
+        storage_name = "Object Storage (Audio)"
     return {
         "services": [
             {"name": "API Server", "status": "operational", "ok": True},
             {"name": "MongoDB", "status": "operational" if db_ok else "down", "ok": db_ok},
-            {"name": "Object Storage (Audio)", "status": "operational" if storage_ok else "degraded", "ok": storage_ok},
+            {"name": storage_name, "status": "operational" if storage_ok else "degraded", "ok": storage_ok},
             {"name": "Streaming CDN", "status": "operational", "ok": True},
         ],
         "counts": {
@@ -995,11 +1001,16 @@ async def admin_upload_audio(file: UploadFile = File(...), admin: dict = Depends
         raise HTTPException(status_code=413, detail="File too large (max 30MB)")
     ext = (file.filename or "audio.mp3").rsplit(".", 1)[-1].lower()
     path = f"{APP_NAME}/uploads/admin/{uuid.uuid4().hex}.{ext}"
+    ct = file.content_type or "audio/mpeg"
     try:
-        await run_in_threadpool(put_object, path, data, file.content_type or "audio/mpeg")
+        if BUNNY_ENABLED:
+            media_url = await run_in_threadpool(bunny_put_object, path, data, ct)
+        else:
+            await run_in_threadpool(put_object, path, data, ct)
+            media_url = f"/api/artists/media/{path}"
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Upload failed: {e}")
-    return {"path": path, "media_url": f"/api/artists/media/{path}"}
+    return {"path": path, "media_url": media_url}
 
 
 HOME_ROWS = [
